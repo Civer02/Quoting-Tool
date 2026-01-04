@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Quoting Tool</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Professional Quoting Tool</h1>
+        </header>
+
+        <div class="quote-form">
+            <!-- Company Information Section -->
+            <section class="form-section">
+                <h2>Company Information</h2>
+                <div class="form-group">
+                    <label>Company Logo</label>
+                    <div id="logoDisplay" style="margin-bottom: 10px; max-width: 200px; max-height: 100px;">
+                        <img id="logoImage" src="" alt="Company Logo" style="max-width: 100%; max-height: 100%; display: none;">
+                    </div>
+                    <small>Logo is set in configuration. <a href="config.html">Change configuration</a></small>
+                </div>
+                <div class="form-group">
+                    <label for="companyName">Company Name *</label>
+                    <input type="text" id="companyName" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="companyAddress">Address</label>
+                        <textarea id="companyAddress" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="companyPhone">Phone</label>
+                        <input type="tel" id="companyPhone">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="companyEmail">Email</label>
+                        <input type="email" id="companyEmail">
+                    </div>
+                    <div class="form-group">
+                        <label for="companyWebsite">Website</label>
+                        <input type="url" id="companyWebsite">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Customer Information Section -->
+            <section class="form-section">
+                <h2>Quote To (Customer Information)</h2>
+                <div class="form-group">
+                    <label for="customerName">Customer Name *</label>
+                    <input type="text" id="customerName" required>
+                </div>
+                <div class="form-group">
+                    <label for="customerAddress">Address</label>
+                    <textarea id="customerAddress" rows="2"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="customerPhone">Phone</label>
+                        <input type="tel" id="customerPhone">
+                    </div>
+                    <div class="form-group">
+                        <label for="customerEmail">Email</label>
+                        <input type="email" id="customerEmail">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="quoteNumber">Quote Number</label>
+                    <input type="text" id="quoteNumber" placeholder="Auto-generated if left blank">
+                </div>
+                <div class="form-group">
+                    <label for="quoteDate">Quote Date</label>
+                    <input type="date" id="quoteDate">
+                </div>
+            </section>
+
+            <!-- Custom Sections -->
+            <section class="form-section">
+                <h2>Quote Sections</h2>
+                <div class="parts-library-section">
+                    <button type="button" class="btn-secondary" id="showPartsLibrary">View Parts Library</button>
+                </div>
+                <div id="customSectionsContainer">
+                    <!-- Sections will be added here dynamically -->
+                </div>
+                <button type="button" class="btn-secondary" id="addCustomSection">+ Add Section</button>
+            </section>
+
+            <!-- Notes Section -->
+            <section class="form-section">
+                <h2>Additional Notes / Scope Description</h2>
+                <div class="form-group">
+                    <textarea id="quoteNotes" rows="4" placeholder="Enter any additional notes, terms, or scope description..."></textarea>
+                </div>
+            </section>
+
+            <!-- Terms and Conditions Section -->
+            <section class="form-section">
+                <h2>Terms and Conditions</h2>
+                <div class="form-group">
+                    <textarea id="termsAndConditions" rows="6" placeholder="Enter terms and conditions (e.g., payment terms, warranty, delivery terms, etc.)..."></textarea>
+                </div>
+            </section>
+
+            <!-- Summary Section -->
+            <section class="form-section summary-section">
+                <h2>Quote Summary</h2>
+                <div class="summary-grid">
+                    <div class="summary-item grand-total">
+                        <span class="summary-label">Grand Total:</span>
+                        <span class="summary-value" id="grandTotal">$0.00</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button type="button" class="btn-primary" id="generatePDF">Generate PDF Quote</button>
+                <button type="button" class="btn-secondary" id="clearForm">Clear Form</button>
+                <button type="button" class="btn-secondary" id="saveDraft">Save Draft</button>
+                <button type="button" class="btn-secondary" id="loadDraft">Load Draft</button>
+                <button type="button" class="btn-secondary" onclick="exportData()">Export Data</button>
+                <button type="button" class="btn-secondary" onclick="importData()">Import Data</button>
+                <button type="button" class="btn-secondary" onclick="window.location.href='config.html'">Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Parts Library Modal -->
+    <div id="partsLibraryModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Parts Library</h2>
+            <div id="partsLibraryList"></div>
+            <button type="button" class="btn-secondary" id="closePartsLibrary">Close</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
+
