@@ -53,6 +53,10 @@
             <section class="form-section">
                 <h2>Quote To (Customer Information)</h2>
                 <div class="form-group">
+                    <label for="jobName">Job Name / Project Name</label>
+                    <input type="text" id="jobName" placeholder="e.g., Kitchen Remodel, Electrical Service">
+                </div>
+                <div class="form-group">
                     <label for="customerName">Customer Name *</label>
                     <input type="text" id="customerName" required>
                 </div>
@@ -80,16 +84,40 @@
                 </div>
             </section>
 
-            <!-- Custom Sections -->
+            <!-- Parts Section -->
             <section class="form-section">
-                <h2>Quote Sections</h2>
+                <h2>Parts</h2>
                 <div class="parts-library-section">
                     <button type="button" class="btn-secondary" id="showPartsLibrary">View Parts Library</button>
+                    <button type="button" class="btn-secondary" id="showInventoryManager" style="margin-left: 10px;">Manage Inventory</button>
                 </div>
-                <div id="customSectionsContainer">
-                    <!-- Sections will be added here dynamically -->
+                <div class="form-group">
+                    <label>Parts Markup (%)</label>
+                    <input type="number" id="partsMarkup" step="0.1" min="0" value="0" placeholder="0">
                 </div>
-                <button type="button" class="btn-secondary" id="addCustomSection">+ Add Section</button>
+                <div id="partsLineItemsContainer">
+                    <!-- Line items will be added here dynamically -->
+                </div>
+                <button type="button" class="btn-secondary" id="addPartLineItem">+ Add Part</button>
+            </section>
+
+            <!-- Labor Hours Section -->
+            <section class="form-section">
+                <h2>Labor Hours</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Hourly Labor Rate ($/hr)</label>
+                        <input type="number" id="laborRate" step="0.01" min="0" value="0" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Number of Hours</label>
+                        <input type="number" id="laborHours" step="0.25" min="0" value="0" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Labor Total</label>
+                        <input type="text" id="laborTotal" readonly value="$0.00" style="font-weight: bold; font-size: 1.1em;">
+                    </div>
+                </div>
             </section>
 
             <!-- Notes Section -->
