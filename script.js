@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Check if app is configured
     const configured = localStorage.getItem('appConfigured');
     if (configured !== 'true') {
-        window.location.href = 'config.html';
+        window.location.href = 'setup.html';
         return;
     }
     
