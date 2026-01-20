@@ -1,836 +1,1062 @@
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', async function() {
-    // Check if app is configured
-    const configured = localStorage.getItem('appConfigured');
-    if (configured !== 'true') {
-        window.location.href = 'config.html';
-        return;
-    }
-    
-    // Load cloud storage settings
-    if (appConfig) {
-        cloudStoragePath = appConfig.cloudStoragePath || '';
-        autoSync = appConfig.autoSync !== false;
-    }
-    
-    // Load parts library (from cloud or local)
-    partsLibrary = await loadPartsLibrary();
-    
-    initializeApp();
+// Construction Quote Generator - Simplified & Fast
+// Focus: Labor + Equipment only
+
+// ===== CONFIGURATION =====
+let appConfig = null;
+let laborItemCounter = 0;
+let equipmentItemCounter = 0;
+let inventory = []; // Inventory items array
+let inventoryCategories = []; // Inventory categories array
+let savedQuotes = []; // Array of saved quotes with revisions
+let sharedStoragePath = ''; // Path to shared storage folder
+let autoSyncEnabled = false;
+let syncOnStartup = false;
+
+// Default Templates (used if not in localStorage)
+const DEFAULT_SCOPE_TEMPLATES = {
+    electrical: "Complete electrical installation including wiring, outlets, switches, and panel connections. All work to be performed per local electrical codes.",
+    plumbing: "Complete plumbing installation including supply lines, fixtures, and connections. All work to be performed per local plumbing codes.",
+    framing: "Framing work including wall construction, structural members, and related carpentry. Materials as specified.",
+    drywall: "Drywall installation including hanging, taping, mudding, and finishing. Includes primer coat.",
+    roofing: "Roofing work including installation, repairs, and related work. Includes materials as specified.",
+    concrete: "Concrete work including preparation, pouring, and finishing. Includes materials as specified."
+};
+
+const DEFAULT_NOTES_TEMPLATES = {
+    standard: "This quote assumes standard site conditions and accessibility. Price valid for 30 days. Payment terms: 50% deposit, balance upon completion.",
+    site: "Assumes standard site conditions, clear access, and standard working hours (M-F, 8am-5pm). Additional charges may apply for difficult access or after-hours work.",
+    materials: "This quote includes all labor and equipment. Materials are included as specified. Any additional materials will be billed separately.",
+    custom: ""
+};
+
+const DEFAULT_EXCLUSIONS_TEMPLATES = {
+    standard: "Excludes: permits, inspections, disposal fees, and any work not specifically listed above.",
+    permits: "Excludes: permits, inspections, and related fees. Customer responsible for obtaining all necessary permits.",
+    materials: "Excludes: materials, supplies, and consumables. Customer to provide or purchase separately.",
+    custom: ""
+};
+
+// Template variables (loaded from localStorage or defaults)
+let SCOPE_TEMPLATES = {};
+let NOTES_TEMPLATES = {};
+let EXCLUSIONS_TEMPLATES = {};
+
+// ===== DEFAULT INVENTORY ITEMS =====
+const DEFAULT_INVENTORY = [
+    { id: 'inv-001', name: 'Mini Excavator', model: 'CAT 305E', description: 'Compact excavator for tight spaces', price: 350.00, discount: 0, multiplier: 1.0, stock: 2, category: 'Heavy Equipment' },
+    { id: 'inv-002', name: 'Skid Steer Loader', model: 'BOBCAT S570', description: 'Versatile loader for material handling', price: 275.00, discount: 0, multiplier: 1.0, stock: 3, category: 'Heavy Equipment' },
+    { id: 'inv-003', name: 'Tower Crane', model: 'LIEBHERR 71K', description: 'Heavy-duty crane for high-rise construction', price: 1200.00, discount: 0, multiplier: 1.0, stock: 1, category: 'Heavy Equipment' },
+    { id: 'inv-004', name: 'Generator', model: 'CAT 3508B', description: '500kW diesel generator', price: 450.00, discount: 0, multiplier: 1.0, stock: 4, category: 'Power Equipment' },
+    { id: 'inv-005', name: 'Scaffolding Set', model: 'SAFEWAY SYS-10', description: '10ft modular scaffolding system', price: 125.00, discount: 0, multiplier: 1.0, stock: 12, category: 'Safety Equipment' },
+    { id: 'inv-006', name: 'Plate Compactor', model: 'WACKER BS60-4i', description: 'Heavy-duty plate compactor', price: 95.00, discount: 0, multiplier: 1.0, stock: 6, category: 'Compaction Equipment' },
+    { id: 'inv-007', name: 'Dump Truck', model: 'FORD F-750', description: '10-ton capacity dump truck', price: 400.00, discount: 0, multiplier: 1.0, stock: 2, category: 'Vehicles' },
+    { id: 'inv-008', name: 'Concrete Mixer', model: 'CATERPILLAR C1.5', description: '1.5 cubic yard concrete mixer', price: 180.00, discount: 0, multiplier: 1.0, stock: 5, category: 'Concrete Equipment' },
+    { id: 'inv-009', name: 'Air Compressor', model: 'INGERSOLL RAND 185', description: '185 CFM portable air compressor', price: 150.00, discount: 0, multiplier: 1.0, stock: 8, category: 'Power Equipment' },
+    { id: 'inv-010', name: 'Forklift', model: 'TOYOTA 8FGCU25', description: '5000lb capacity forklift', price: 320.00, discount: 0, multiplier: 1.0, stock: 2, category: 'Material Handling' }
+];
+
+// ===== DEFAULT CATEGORIES =====
+const DEFAULT_CATEGORIES = [
+    'Heavy Equipment',
+    'Power Equipment',
+    'Safety Equipment',
+    'Compaction Equipment',
+    'Vehicles',
+    'Concrete Equipment',
+    'Material Handling',
+    'General'
+];
+
+// ===== INITIALIZATION =====
+document.addEventListener('DOMContentLoaded', function() {
+    loadConfig();
+    loadStorageSettings();
+    loadCategories();
+    loadInventory();
+    loadTemplates();
+    loadSavedQuotes();
+    setupEventListeners();
+    initializeQuote();
+    showPage('start'); // Show start page by default
 });
 
-// Global variables
-let appConfig = loadAppConfig();
-let cloudStoragePath = appConfig?.cloudStoragePath || '';
-let autoSync = appConfig?.autoSync !== false; // Default to true
-let cloudFileHandle = null; // For File System Access API
-let partsLibrary = []; // Will be loaded asynchronously
-let lineItemCounter = 0;
-
-// Load app configuration
-function loadAppConfig() {
+function loadConfig() {
     const stored = localStorage.getItem('appConfig');
-    return stored ? JSON.parse(stored) : null;
+    if (stored) {
+        appConfig = JSON.parse(stored);
+        populateConfigForm();
+    }
 }
 
-// Apply color scheme
-function applyColorScheme() {
-    if (!appConfig || !appConfig.colorScheme) return;
-    
-    const colorSchemes = {
-        purple: { primary: '#667eea', secondary: '#764ba2' },
-        blue: { primary: '#4facfe', secondary: '#00f2fe' },
-        green: { primary: '#43e97b', secondary: '#38f9d7' },
-        red: { primary: '#fa709a', secondary: '#fee140' },
-        orange: { primary: '#fad961', secondary: '#f76b1c' },
-        teal: { primary: '#30cfd0', secondary: '#330867' },
-        navy: { primary: '#1e3c72', secondary: '#2a5298' },
-        burgundy: { primary: '#eb3349', secondary: '#f45c43' }
-    };
-    
-    const colors = colorSchemes[appConfig.colorScheme] || colorSchemes.purple;
-    const style = document.createElement('style');
-    style.textContent = `
-        header { background: linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%) !important; }
-        .form-section h2 { color: ${colors.primary} !important; border-bottom-color: ${colors.primary} !important; }
-        .btn-primary { background: linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%) !important; }
-        .summary-section { border-color: ${colors.primary} !important; }
-        .summary-item { border-left-color: ${colors.primary} !important; }
-        .summary-item.grand-total { background: linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%) !important; }
-    `;
-    document.head.appendChild(style);
-}
-
-// Initialize the application
-function initializeApp() {
-    // Apply color scheme
-    applyColorScheme();
-    
-    // Load configuration and populate company info
-    if (appConfig) {
-        document.getElementById('companyName').value = appConfig.companyName || '';
-        document.getElementById('companyAddress').value = appConfig.companyAddress || '';
-        document.getElementById('companyPhone').value = appConfig.companyPhone || '';
-        document.getElementById('companyEmail').value = appConfig.companyEmail || '';
-        document.getElementById('companyWebsite').value = appConfig.companyWebsite || '';
+function loadStorageSettings() {
+    const stored = localStorage.getItem('storageSettings');
+    if (stored) {
+        const settings = JSON.parse(stored);
+        sharedStoragePath = settings.sharedStoragePath || '';
+        autoSyncEnabled = settings.autoSyncEnabled || false;
+        syncOnStartup = settings.syncOnStartup || false;
         
-        // Display logo if available
-        if (appConfig.logoData) {
-            const logoImg = document.getElementById('logoImage');
-            logoImg.src = appConfig.logoData;
-            logoImg.style.display = 'block';
+        // Populate settings form
+        if (document.getElementById('sharedStoragePath')) {
+            document.getElementById('sharedStoragePath').value = sharedStoragePath;
+            document.getElementById('enableAutoSync').checked = autoSyncEnabled;
+            document.getElementById('syncOnStartup').checked = syncOnStartup;
         }
-    }
-    
-    // Set default quote date to today
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('quoteDate').value = today;
-
-    // Generate default quote number
-    if (!document.getElementById('quoteNumber').value) {
-        document.getElementById('quoteNumber').value = generateQuoteNumber();
-    }
-
-    // Event listeners
-    document.getElementById('addPartLineItem').addEventListener('click', addPartLineItem);
-    document.getElementById('generatePDF').addEventListener('click', generatePDF);
-    document.getElementById('clearForm').addEventListener('click', clearForm);
-    document.getElementById('saveDraft').addEventListener('click', saveDraft);
-    document.getElementById('loadDraft').addEventListener('click', loadDraft);
-    document.getElementById('showPartsLibrary').addEventListener('click', showPartsLibrary);
-    document.getElementById('closePartsLibrary').addEventListener('click', closePartsLibrary);
-    document.getElementById('showInventoryManager').addEventListener('click', showInventoryManager);
-    document.getElementById('closeInventoryBtn').addEventListener('click', closeInventory);
-    document.getElementById('closeInventory').addEventListener('click', closeInventory);
-    
-    // Inventory search
-    document.getElementById('inventorySearch').addEventListener('input', function() {
-        showInventoryManager();
-    });
-    
-    // Labor hours calculation
-    document.getElementById('laborRate').addEventListener('input', updateCalculations);
-    document.getElementById('laborHours').addEventListener('input', updateCalculations);
-    
-    // Parts markup calculation
-    document.getElementById('partsMarkup').addEventListener('input', updateCalculations);
-    
-    // Close modal when clicking outside
-    window.onclick = function(event) {
-        const partsModal = document.getElementById('partsLibraryModal');
-        const inventoryModal = document.getElementById('inventoryModal');
-        if (event.target === partsModal) {
-            closePartsLibrary();
-        }
-        if (event.target === inventoryModal) {
-            closeInventory();
-        }
-    }
-
-    // Close modal with X button
-    document.querySelector('.close').addEventListener('click', closePartsLibrary);
-
-    // Set default values if config exists
-    if (appConfig) {
-        const partsMarkup = document.getElementById('partsMarkup');
-        const laborRate = document.getElementById('laborRate');
-        if (partsMarkup && appConfig.defaultMarkup) {
-            partsMarkup.value = appConfig.defaultMarkup;
-        }
-        if (laborRate && appConfig.defaultLaborRate) {
-            laborRate.value = appConfig.defaultLaborRate;
-        }
-    }
-    
-    // Initialize with one part line item if none exist
-    if (document.getElementById('partsLineItemsContainer').children.length === 0) {
-        addPartLineItem();
-    }
-    
-    // Initialize calculations
-    updateCalculations();
-}
-
-// Cloud Storage Functions - File-based storage that syncs via cloud
-async function loadPartsLibrary() {
-    let library = [];
-    
-    // Try to load from cloud file first
-    if (cloudStoragePath && autoSync) {
-        try {
-            const cloudData = await loadFromCloudFile();
-            if (cloudData && cloudData.partsLibrary) {
-                library = cloudData.partsLibrary;
-            }
-        } catch (e) {
-            console.log('Could not load from cloud file, using local storage:', e);
-        }
-    }
-    
-    // Fallback to localStorage
-    if (library.length === 0) {
-        const storedLocal = localStorage.getItem('partsLibrary');
-        library = storedLocal ? JSON.parse(storedLocal) : [];
-    }
-    
-    // Migrate old parts (without inventory) to include inventory field
-    library = library.map(part => {
-        if (part.inventory === undefined) {
-            part.inventory = 0;
-        }
-        return part;
-    });
-    
-    // Save migrated data
-    if (library.length > 0 && library.some(p => p.inventory === undefined)) {
-        partsLibrary = library;
-        await savePartsLibrary();
-    }
-    
-    return library;
-}
-
-async function savePartsLibrary() {
-    // Always save to localStorage as backup
-    localStorage.setItem('partsLibrary', JSON.stringify(partsLibrary));
-    
-    // Also save to cloud file if enabled
-    if (autoSync) {
-        try {
-            await saveToCloudFile();
-        } catch (e) {
-            console.log('Could not save to cloud file:', e);
-            // Still works - data is in localStorage
+        
+        // Sync on startup if enabled
+        if (syncOnStartup && sharedStoragePath) {
+            syncFromSharedStorage();
         }
     }
 }
 
-// Cloud file operations
-async function loadFromCloudFile() {
-    if (!cloudStoragePath) return null;
-    
-    try {
-        // Try File System Access API (Chrome, Edge)
-        if ('showOpenFilePicker' in window) {
-            if (!cloudFileHandle) {
-                // Request file access
-                const [handle] = await window.showOpenFilePicker({
-                    suggestedName: 'quoting-tool-data.json',
-                    types: [{
-                        description: 'JSON files',
-                        accept: { 'application/json': ['.json'] }
-                    }],
-                    startIn: 'documents'
-                });
-                cloudFileHandle = handle;
-            }
-            
-            const file = await cloudFileHandle.getFile();
-            const text = await file.text();
-            return JSON.parse(text);
-        } else {
-            // Fallback: Try to read from localStorage path reference
-            const filePath = localStorage.getItem('cloudFilePath');
-            if (filePath) {
-                // For now, we'll use export/import functionality
-                // User can manually sync the file
-                return null;
-            }
-        }
-    } catch (e) {
-        console.log('File access error:', e);
-        return null;
-    }
-}
-
-async function saveToCloudFile(customData = null) {
-    if (!cloudStoragePath) return;
-    
-    const data = customData || {
-        partsLibrary: partsLibrary,
-        lastUpdated: new Date().toISOString()
-    };
-    
-    try {
-        // Try File System Access API
-        if ('showSaveFilePicker' in window) {
-            let fileHandle = cloudFileHandle;
-            
-            if (!fileHandle) {
-                // Create new file
-                fileHandle = await window.showSaveFilePicker({
-                    suggestedName: 'quoting-tool-data.json',
-                    types: [{
-                        description: 'JSON files',
-                        accept: { 'application/json': ['.json'] }
-                    }],
-                    startIn: 'documents'
-                });
-                cloudFileHandle = fileHandle;
-            }
-            
-            const writable = await fileHandle.createWritable();
-            await writable.write(JSON.stringify(data, null, 2));
-            await writable.close();
-            
-            // Store file handle reference
-            localStorage.setItem('cloudFileHandle', JSON.stringify({ name: fileHandle.name }));
-        } else {
-            // Fallback: Download file for manual cloud sync
-            downloadDataFile(data, 'quoting-tool-data.json');
-        }
-    } catch (e) {
-        console.log('File save error:', e);
-        // Fallback to download
-        downloadDataFile(data, 'quoting-tool-data.json');
-    }
-}
-
-function downloadDataFile(data, filename) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
-// Export/Import functions for manual cloud sync
-function exportData() {
-    const data = {
-        partsLibrary: partsLibrary,
-        lastUpdated: new Date().toISOString(),
-        version: '1.0'
-    };
-    downloadDataFile(data, `quoting-tool-data-${new Date().toISOString().split('T')[0]}.json`);
-    alert('Data exported! Save this file to your cloud storage folder to sync across devices.');
-}
-
-function importData() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const text = await file.text();
-            const data = JSON.parse(text);
-            if (data.partsLibrary) {
-                partsLibrary = data.partsLibrary;
-                await savePartsLibrary();
-                alert('Data imported successfully!');
-                location.reload();
-            } else {
-                alert('Invalid data file.');
-            }
-        }
-    };
-    input.click();
-}
-
-async function addToPartsLibrary(partNumber, description, price) {
-    // Check if part already exists
-    const existingIndex = partsLibrary.findIndex(p => p.partNumber.toLowerCase() === partNumber.toLowerCase());
-    
-    if (existingIndex >= 0) {
-        // Update existing part (preserve inventory if it exists)
-        const existingPart = partsLibrary[existingIndex];
-        partsLibrary[existingIndex] = { 
-            partNumber, 
-            description, 
-            price: parseFloat(price),
-            inventory: existingPart.inventory !== undefined ? existingPart.inventory : 0
-        };
+function loadCategories() {
+    const stored = localStorage.getItem('inventoryCategories');
+    if (stored) {
+        inventoryCategories = JSON.parse(stored);
     } else {
-        // Add new part with 0 inventory
-        partsLibrary.push({ 
-            partNumber, 
-            description, 
-            price: parseFloat(price),
-            inventory: 0
+        // Initialize with default categories
+        inventoryCategories = [...DEFAULT_CATEGORIES];
+        saveCategories();
+    }
+    updateCategoryDropdowns();
+}
+
+function saveCategories() {
+    localStorage.setItem('inventoryCategories', JSON.stringify(inventoryCategories));
+    updateCategoryDropdowns();
+}
+
+function updateCategoryDropdowns() {
+    // Update inventory form category dropdown
+    const invCategorySelect = document.getElementById('invCategory');
+    if (invCategorySelect) {
+        const currentValue = invCategorySelect.value;
+        invCategorySelect.innerHTML = inventoryCategories.map(cat => 
+            `<option value="${cat}">${cat}</option>`
+        ).join('');
+        if (inventoryCategories.includes(currentValue)) {
+            invCategorySelect.value = currentValue;
+        }
+    }
+    
+    // Update inventory filter dropdown
+    const filterSelect = document.getElementById('inventoryCategoryFilter');
+    if (filterSelect) {
+        const currentValue = filterSelect.value;
+        filterSelect.innerHTML = `
+            <option value="all">All Categories</option>
+            ${inventoryCategories.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
+        `;
+        if (currentValue === 'all' || inventoryCategories.includes(currentValue)) {
+            filterSelect.value = currentValue;
+        } else {
+            filterSelect.value = 'all';
+        }
+    }
+}
+
+function loadInventory() {
+    const stored = localStorage.getItem('inventory');
+    if (stored) {
+        inventory = JSON.parse(stored);
+    } else {
+        // Initialize with default items
+        inventory = JSON.parse(JSON.stringify(DEFAULT_INVENTORY));
+        saveInventory();
+    }
+}
+
+function saveInventory() {
+    localStorage.setItem('inventory', JSON.stringify(inventory));
+    
+    // Auto-sync to shared storage if enabled
+    if (autoSyncEnabled && sharedStoragePath) {
+        syncToSharedStorage();
+    }
+}
+
+function loadSavedQuotes() {
+    const stored = localStorage.getItem('savedQuotes');
+    if (stored) {
+        savedQuotes = JSON.parse(stored);
+        // Ensure backward compatibility - add approval fields to old quotes
+        savedQuotes.forEach(quote => {
+            if (quote.approved === undefined) {
+                quote.approved = false;
+                quote.approvedAt = null;
+                quote.approvedRevision = null;
+            }
+        });
+    } else {
+        savedQuotes = [];
+    }
+}
+
+function saveSavedQuotes() {
+    localStorage.setItem('savedQuotes', JSON.stringify(savedQuotes));
+    
+    // Auto-sync to shared storage if enabled
+    if (autoSyncEnabled && sharedStoragePath) {
+        syncToSharedStorage();
+    }
+}
+
+function loadTemplates() {
+    // Load scope templates
+    const storedScope = localStorage.getItem('scopeTemplates');
+    SCOPE_TEMPLATES = storedScope ? JSON.parse(storedScope) : JSON.parse(JSON.stringify(DEFAULT_SCOPE_TEMPLATES));
+    
+    // Load notes templates
+    const storedNotes = localStorage.getItem('notesTemplates');
+    NOTES_TEMPLATES = storedNotes ? JSON.parse(storedNotes) : JSON.parse(JSON.stringify(DEFAULT_NOTES_TEMPLATES));
+    
+    // Load exclusions templates
+    const storedExclusions = localStorage.getItem('exclusionsTemplates');
+    EXCLUSIONS_TEMPLATES = storedExclusions ? JSON.parse(storedExclusions) : JSON.parse(JSON.stringify(DEFAULT_EXCLUSIONS_TEMPLATES));
+    
+    // Update dropdowns with loaded templates
+    updateTemplateDropdowns();
+}
+
+function updateTemplateDropdowns() {
+    // Update scope template dropdown
+    const scopeSelect = document.getElementById('scopeTemplate');
+    if (scopeSelect) {
+        const currentValue = scopeSelect.value;
+        scopeSelect.innerHTML = '<option value="">-- Select Template or Type Custom --</option>';
+        Object.keys(SCOPE_TEMPLATES).forEach(key => {
+            if (key !== 'custom') {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+                scopeSelect.appendChild(option);
+            }
+        });
+        scopeSelect.innerHTML += '<option value="custom">Custom (Type Below)</option>';
+        scopeSelect.value = currentValue;
+    }
+    
+    // Update notes template dropdown
+    const notesSelect = document.getElementById('notesTemplate');
+    if (notesSelect) {
+        const currentValue = notesSelect.value;
+        notesSelect.innerHTML = '<option value="">-- Select Template or Type Custom --</option>';
+        Object.keys(NOTES_TEMPLATES).forEach(key => {
+            if (key !== 'custom') {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+                notesSelect.appendChild(option);
+            }
+        });
+        notesSelect.innerHTML += '<option value="custom">Custom Notes</option>';
+        notesSelect.value = currentValue;
+    }
+    
+    // Update exclusions template dropdown
+    const exclusionsSelect = document.getElementById('exclusionsTemplate');
+    if (exclusionsSelect) {
+        const currentValue = exclusionsSelect.value;
+        exclusionsSelect.innerHTML = '<option value="">-- Select Template or Type Custom --</option>';
+        Object.keys(EXCLUSIONS_TEMPLATES).forEach(key => {
+            if (key !== 'custom') {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+                exclusionsSelect.appendChild(option);
+            }
+        });
+        exclusionsSelect.innerHTML += '<option value="custom">Custom Exclusions</option>';
+        exclusionsSelect.value = currentValue;
+    }
+}
+
+function saveTemplates() {
+    localStorage.setItem('scopeTemplates', JSON.stringify(SCOPE_TEMPLATES));
+    localStorage.setItem('notesTemplates', JSON.stringify(NOTES_TEMPLATES));
+    localStorage.setItem('exclusionsTemplates', JSON.stringify(EXCLUSIONS_TEMPLATES));
+    
+    // Auto-sync to shared storage if enabled
+    if (autoSyncEnabled && sharedStoragePath) {
+        syncToSharedStorage();
+    }
+}
+
+function setupEventListeners() {
+    // Auto-calculate on input changes
+    document.addEventListener('input', debounce(updateCalculations, 300));
+    
+    // Set valid until date (30 days from quote date)
+    const quoteDateInput = document.getElementById('quoteDate');
+    if (quoteDateInput) {
+        quoteDateInput.addEventListener('change', function() {
+            const date = new Date(this.value);
+            date.setDate(date.getDate() + 30);
+            document.getElementById('validUntil').value = date.toISOString().split('T')[0];
         });
     }
+}
+
+function initializeQuote() {
+    const quoteDateInput = document.getElementById('quoteDate');
+    const validUntilInput = document.getElementById('validUntil');
+    const quoteNumberInput = document.getElementById('quoteNumber');
     
-    await savePartsLibrary();
+    if (quoteDateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        quoteDateInput.value = today;
+    }
+    if (validUntilInput) {
+        validUntilInput.value = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    }
+    if (quoteNumberInput) {
+        quoteNumberInput.value = generateQuoteNumber();
+    }
 }
 
-async function removeFromPartsLibrary(partNumber) {
-    partsLibrary = partsLibrary.filter(p => p.partNumber !== partNumber);
-    await savePartsLibrary();
-    showPartsLibrary();
+// ===== NAVIGATION =====
+function showPage(pageName) {
+    // Hide all pages
+    document.querySelectorAll('.page').forEach(page => {
+        page.style.display = 'none';
+    });
+    
+    // Show selected page
+    const pageMap = {
+        'start': 'startPage',
+        'proposal': 'proposalPage',
+        'inventory': 'inventoryPage',
+        'templates': 'templatesPage',
+        'quotes': 'quotesPage',
+        'settings': 'settingsPage'
+    };
+    
+    const pageId = pageMap[pageName];
+    if (pageId) {
+        const page = document.getElementById(pageId);
+        if (page) {
+            page.style.display = 'block';
+            
+            // Initialize page-specific content
+            if (pageName === 'proposal') {
+                // Ensure quote is initialized
+                initializeQuote();
+                // Add initial items if container is empty
+                if (document.getElementById('laborItemsContainer') && document.getElementById('laborItemsContainer').children.length === 0) {
+                    addLaborItem();
+                    addEquipmentItem();
+                }
+            } else if (pageName === 'inventory') {
+                renderCategoriesList();
+                renderInventoryList();
+            } else if (pageName === 'templates') {
+                renderTemplateLists();
+            } else if (pageName === 'quotes') {
+                renderQuotesList();
+            } else if (pageName === 'settings') {
+                populateConfigForm();
+            }
+        }
+    }
 }
 
-// Parts Section Functions
-function addPartLineItem() {
-    lineItemCounter++;
-    const container = document.getElementById('partsLineItemsContainer');
-    const newItem = document.createElement('div');
-    newItem.className = 'line-item';
-    newItem.innerHTML = `
-        <div class="form-row" style="background: #f5f5f5; padding: 15px; border-radius: 6px; margin-bottom: 10px;">
-            <div class="form-group">
-                <label>Part Number / Item</label>
-                <input type="text" class="part-number" placeholder="Enter or select from library" data-index="${lineItemCounter}">
-                <div class="parts-autocomplete" id="autocomplete-${lineItemCounter}"></div>
-            </div>
+// ===== SETTINGS =====
+function populateConfigForm() {
+    if (appConfig) {
+        const nameInput = document.getElementById('configCompanyName');
+        const phoneInput = document.getElementById('configCompanyPhone');
+        const emailInput = document.getElementById('configCompanyEmail');
+        const addressInput = document.getElementById('configCompanyAddress');
+        const laborRateInput = document.getElementById('defaultLaborRate');
+        const taxRateInput = document.getElementById('taxRate');
+        
+        if (nameInput) nameInput.value = appConfig.companyName || '';
+        if (phoneInput) phoneInput.value = appConfig.companyPhone || '';
+        if (emailInput) emailInput.value = appConfig.companyEmail || '';
+        if (addressInput) addressInput.value = appConfig.companyAddress || '';
+        if (laborRateInput) laborRateInput.value = appConfig.defaultLaborRate || 75.00;
+        if (taxRateInput) taxRateInput.value = appConfig.taxRate || 0;
+        
+        if (appConfig.logoData) {
+            const logoPreview = document.getElementById('logoPreview');
+            const logoPreviewImg = document.getElementById('logoPreviewImg');
+            if (logoPreviewImg) {
+                logoPreviewImg.src = appConfig.logoData;
+                if (logoPreview) logoPreview.style.display = 'block';
+            }
+        }
+    }
+    
+    // Populate storage settings
+    const storagePathInput = document.getElementById('sharedStoragePath');
+    const autoSyncInput = document.getElementById('enableAutoSync');
+    const syncStartupInput = document.getElementById('syncOnStartup');
+    
+    if (storagePathInput) storagePathInput.value = sharedStoragePath || '';
+    if (autoSyncInput) autoSyncInput.checked = autoSyncEnabled;
+    if (syncStartupInput) syncStartupInput.checked = syncOnStartup;
+}
+
+function handleLogoUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('logoPreviewImg').src = e.target.result;
+            document.getElementById('logoPreview').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function saveSettings() {
+    const logoFile = document.getElementById('logoUpload').files[0];
+    let logoData = appConfig?.logoData || null;
+    
+    if (logoFile) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            logoData = e.target.result;
+            saveConfigToStorage(logoData);
+        };
+        reader.readAsDataURL(logoFile);
+            } else {
+        saveConfigToStorage(logoData);
+    }
+}
+
+function saveConfigToStorage(logoData) {
+    appConfig = {
+        companyName: document.getElementById('configCompanyName').value,
+        companyPhone: document.getElementById('configCompanyPhone').value,
+        companyEmail: document.getElementById('configCompanyEmail').value,
+        companyAddress: document.getElementById('configCompanyAddress').value,
+        defaultLaborRate: parseFloat(document.getElementById('defaultLaborRate').value) || 75.00,
+        taxRate: parseFloat(document.getElementById('taxRate').value) || 0,
+        logoData: logoData
+    };
+    
+    localStorage.setItem('appConfig', JSON.stringify(appConfig));
+    
+    // Save storage settings
+    const storagePathInput = document.getElementById('sharedStoragePath');
+    const autoSyncInput = document.getElementById('enableAutoSync');
+    const syncStartupInput = document.getElementById('syncOnStartup');
+    
+    if (storagePathInput) sharedStoragePath = storagePathInput.value.trim();
+    if (autoSyncInput) autoSyncEnabled = autoSyncInput.checked;
+    if (syncStartupInput) syncOnStartup = syncStartupInput.checked;
+    
+    const storageSettings = {
+        sharedStoragePath: sharedStoragePath,
+        autoSyncEnabled: autoSyncEnabled,
+        syncOnStartup: syncOnStartup
+    };
+    localStorage.setItem('storageSettings', JSON.stringify(storageSettings));
+    
+    // Sync to shared storage if enabled
+    if (autoSyncEnabled && sharedStoragePath) {
+        syncToSharedStorage();
+    }
+    
+    alert('Settings saved successfully!');
+}
+
+// ===== LABOR ITEMS =====
+function addLaborItem() {
+    laborItemCounter++;
+    const container = document.getElementById('laborItemsContainer');
+    const defaultRate = appConfig?.defaultLaborRate || 75.00;
+    
+    const item = document.createElement('div');
+    item.className = 'line-item';
+    item.dataset.id = laborItemCounter;
+    item.innerHTML = `
+        <div class="line-item-content">
             <div class="form-group" style="flex: 2;">
                 <label>Description</label>
-                <input type="text" class="part-description" placeholder="Auto-filled from library">
+                <select class="labor-template" onchange="applyLaborTemplate(this)" style="margin-bottom: 5px;">
+                    <option value="">-- Quick Select --</option>
+                    <option value="electrical">Electrical Work</option>
+                    <option value="plumbing">Plumbing Work</option>
+                    <option value="framing">Framing</option>
+                    <option value="drywall">Drywall</option>
+                    <option value="roofing">Roofing</option>
+                    <option value="concrete">Concrete</option>
+                    <option value="general">General Labor</option>
+                </select>
+                <input type="text" class="labor-description" placeholder="Labor description" required>
             </div>
             <div class="form-group">
-                <label>Unit Price ($)</label>
-                <input type="number" class="part-price" step="0.01" min="0" placeholder="0.00">
+                <label>Hours</label>
+                <select class="labor-hours-quick" onchange="this.nextElementSibling.value=this.value; updateCalculations()" style="margin-bottom: 5px;">
+                    <option value="">Quick</option>
+                    <option value="1">1 hr</option>
+                    <option value="2">2 hrs</option>
+                    <option value="4">4 hrs</option>
+                    <option value="8">8 hrs</option>
+                    <option value="16">16 hrs</option>
+                    <option value="40">40 hrs</option>
+                </select>
+                <input type="number" class="labor-hours" step="0.25" min="0" value="8" required oninput="updateCalculations()">
             </div>
             <div class="form-group">
-                <label>Quantity</label>
-                <input type="number" class="part-quantity" step="1" min="1" value="1">
+                <label>Rate ($/hr)</label>
+                <input type="number" class="labor-rate" step="0.01" min="0" value="${defaultRate}" required oninput="updateCalculations()">
             </div>
             <div class="form-group">
                 <label>Total</label>
-                <input type="text" class="part-total" readonly value="$0.00" style="font-weight: bold;">
+                <input type="text" class="labor-total" readonly value="$0.00" style="font-weight: bold;">
             </div>
             <div class="form-group">
-                <button type="button" class="btn-remove" onclick="removeLineItem(this)">Remove</button>
+                <button type="button" class="btn-remove" onclick="removeLaborItem(this)">Remove</button>
             </div>
         </div>
     `;
-    container.appendChild(newItem);
-    
-    // Add event listeners
-    const partNumberInput = newItem.querySelector('.part-number');
-    const descriptionInput = newItem.querySelector('.part-description');
-    const priceInput = newItem.querySelector('.part-price');
-    const quantityInput = newItem.querySelector('.part-quantity');
-    
-    partNumberInput.addEventListener('input', function() {
-        handlePartNumberInput(this, descriptionInput, priceInput);
-    });
-    
-    partNumberInput.addEventListener('blur', function() {
-        setTimeout(() => hideAutocomplete(this.dataset.index), 200);
-    });
-    
-    priceInput.addEventListener('input', calculateLineItemTotal);
-    quantityInput.addEventListener('input', calculateLineItemTotal);
-    
-    partNumberInput.addEventListener('blur', function() {
-        if (this.value && priceInput.value && descriptionInput.value) {
-            addToPartsLibrary(this.value, descriptionInput.value, priceInput.value);
-        }
-    });
-    
+    container.appendChild(item);
     updateCalculations();
 }
 
-function removeLineItem(button) {
+function applyLaborTemplate(select) {
+    const templates = {
+        electrical: "Electrical installation and wiring",
+        plumbing: "Plumbing installation and connections",
+        framing: "Framing and structural work",
+        drywall: "Drywall installation and finishing",
+        roofing: "Roofing installation and repairs",
+        concrete: "Concrete work and finishing",
+        general: "General construction labor"
+    };
+    if (select.value) {
+        select.parentElement.querySelector('.labor-description').value = templates[select.value];
+        updateCalculations();
+    }
+}
+
+function removeLaborItem(button) {
     button.closest('.line-item').remove();
     updateCalculations();
 }
 
-function handlePartNumberInput(input, descriptionInput, priceInput) {
-    const searchTerm = input.value.toLowerCase();
-    const autocompleteDiv = document.getElementById(`autocomplete-${input.dataset.index}`);
+// ===== EQUIPMENT ITEMS =====
+function addEquipmentItem() {
+    equipmentItemCounter++;
+    const container = document.getElementById('equipmentItemsContainer');
     
-    if (searchTerm.length === 0) {
-        hideAutocomplete(input.dataset.index);
-        return;
-    }
-    
-    // Search parts library
-    const matches = partsLibrary.filter(p => 
-        p.partNumber.toLowerCase().includes(searchTerm) ||
-        p.description.toLowerCase().includes(searchTerm)
-    );
-    
-    if (matches.length > 0) {
-        showAutocomplete(input.dataset.index, matches, descriptionInput, priceInput, input);
-    } else {
-        hideAutocomplete(input.dataset.index);
-    }
-}
-
-function showAutocomplete(index, matches, descriptionInput, priceInput, partNumberInput) {
-    const autocompleteDiv = document.getElementById(`autocomplete-${index}`);
-    autocompleteDiv.innerHTML = '';
-    
-    matches.forEach(part => {
-        const item = document.createElement('div');
-        item.className = 'parts-autocomplete-item';
-        item.innerHTML = `<strong>${part.partNumber}</strong> - ${part.description} ($${part.price.toFixed(2)})`;
-        item.addEventListener('click', function() {
-            partNumberInput.value = part.partNumber;
-            descriptionInput.value = part.description;
-            priceInput.value = part.price;
-            calculateLineItemTotal();
-            hideAutocomplete(index);
-        });
-        autocompleteDiv.appendChild(item);
-    });
-    
-    autocompleteDiv.style.display = 'block';
-}
-
-function hideAutocomplete(index) {
-    const autocompleteDiv = document.getElementById(`autocomplete-${index}`);
-    if (autocompleteDiv) {
-        autocompleteDiv.style.display = 'none';
-    }
-}
-
-function calculateLineItemTotal() {
-    // Calculate totals for all part line items
-    const lineItems = document.querySelectorAll('#partsLineItemsContainer .line-item');
-    lineItems.forEach(item => {
-        const price = parseFloat(item.querySelector('.part-price').value) || 0;
-        const quantity = parseFloat(item.querySelector('.part-quantity').value) || 0;
-        const total = price * quantity;
-        item.querySelector('.part-total').value = `$${total.toFixed(2)}`;
-    });
+    const item = document.createElement('div');
+    item.className = 'line-item';
+    item.dataset.id = equipmentItemCounter;
+    item.innerHTML = `
+        <div class="line-item-content">
+            <div class="form-group" style="flex: 2;">
+                <label>Equipment</label>
+                <select class="equipment-inventory-select" onchange="selectInventoryItem(this)" style="margin-bottom: 5px;">
+                    <option value="">-- Select from Inventory --</option>
+                    ${inventory.map(inv => `<option value="${inv.id}">${inv.name} (${inv.model}) - $${inv.price.toFixed(2)}</option>`).join('')}
+                </select>
+                <input type="text" class="equipment-description" placeholder="Equipment description" required>
+                <input type="hidden" class="equipment-inventory-id" value="">
+            </div>
+            <div class="form-group">
+                <label>Quantity</label>
+                <input type="number" class="equipment-quantity" step="1" min="1" value="1" required oninput="updateCalculations()">
+            </div>
+            <div class="form-group">
+                <label>Price</label>
+                <input type="number" class="equipment-price" step="0.01" min="0" value="" required oninput="updateCalculations()" placeholder="Select from inventory or enter price">
+            </div>
+            <div class="form-group">
+                <label>Markup %</label>
+                <input type="number" class="equipment-markup" step="0.1" min="0" value="0" oninput="updateCalculations()" placeholder="0">
+            </div>
+            <div class="form-group">
+                <label>Total</label>
+                <input type="text" class="equipment-total" readonly value="$0.00" style="font-weight: bold;">
+            </div>
+            <div class="form-group">
+                <button type="button" class="btn-remove" onclick="removeEquipmentItem(this)">Remove</button>
+            </div>
+        </div>
+    `;
+    container.appendChild(item);
     updateCalculations();
 }
 
-
-// Calculation Functions
-function updateCalculations() {
-    calculateLineItemTotal();
+function selectInventoryItem(select) {
+    const inventoryId = select.value;
+    if (!inventoryId) return;
     
-    // Calculate parts subtotal
-    let partsSubtotal = 0;
-    document.querySelectorAll('#partsLineItemsContainer .line-item').forEach(item => {
-        const price = parseFloat(item.querySelector('.part-price').value) || 0;
-        const quantity = parseFloat(item.querySelector('.part-quantity').value) || 0;
-        partsSubtotal += price * quantity;
+    const invItem = inventory.find(item => item.id === inventoryId);
+    if (!invItem) return;
+    
+    const lineItem = select.closest('.line-item');
+    const descriptionInput = lineItem.querySelector('.equipment-description');
+    const priceInput = lineItem.querySelector('.equipment-price');
+    const inventoryIdInput = lineItem.querySelector('.equipment-inventory-id');
+    
+    // Calculate base price with discount and multiplier
+    let basePrice = invItem.price;
+    if (invItem.discount > 0) {
+        basePrice = basePrice * (1 - invItem.discount / 100);
+    }
+    if (invItem.multiplier !== 1.0) {
+        basePrice = basePrice * invItem.multiplier;
+    }
+    
+    // Populate fields
+    descriptionInput.value = `${invItem.name} - ${invItem.model}`;
+    priceInput.value = basePrice.toFixed(2);
+    inventoryIdInput.value = inventoryId;
+    
+    updateCalculations();
+}
+
+function applyEquipmentTemplate(select) {
+    const templates = {
+        excavator: "Excavator rental",
+        crane: "Crane rental",
+        loader: "Loader rental",
+        generator: "Generator rental",
+        scaffolding: "Scaffolding rental",
+        compactor: "Compactor rental",
+        truck: "Truck/Vehicle rental"
+    };
+    if (select.value) {
+        select.parentElement.querySelector('.equipment-description').value = templates[select.value];
+    updateCalculations();
+    }
+}
+
+function removeEquipmentItem(button) {
+    button.closest('.line-item').remove();
+    updateCalculations();
+}
+
+// ===== TEMPLATES =====
+function applyScopeTemplate() {
+    const select = document.getElementById('scopeTemplate');
+    if (select.value && select.value !== 'custom') {
+        document.getElementById('scopeSummary').value = SCOPE_TEMPLATES[select.value];
+    }
+}
+
+function applyNotesTemplate() {
+    const select = document.getElementById('notesTemplate');
+    if (select.value && select.value !== 'custom') {
+        document.getElementById('notes').value = NOTES_TEMPLATES[select.value];
+    }
+}
+
+function applyExclusionsTemplate() {
+    const select = document.getElementById('exclusionsTemplate');
+    if (select.value && select.value !== 'custom') {
+        document.getElementById('exclusions').value = EXCLUSIONS_TEMPLATES[select.value];
+    }
+}
+
+// ===== CALCULATIONS =====
+function updateCalculations() {
+    // Calculate labor totals
+    let laborSubtotal = 0;
+    document.querySelectorAll('#laborItemsContainer .line-item').forEach(item => {
+        const hours = parseFloat(item.querySelector('.labor-hours').value) || 0;
+        const rate = parseFloat(item.querySelector('.labor-rate').value) || 0;
+        const total = hours * rate;
+        item.querySelector('.labor-total').value = `$${total.toFixed(2)}`;
+        laborSubtotal += total;
     });
     
-    // Apply parts markup
-    const markupPercent = parseFloat(document.getElementById('partsMarkup').value) || 0;
-    const partsTotal = partsSubtotal * (1 + markupPercent / 100);
+    // Calculate equipment totals
+    let equipmentSubtotal = 0;
+    document.querySelectorAll('#equipmentItemsContainer .line-item').forEach(item => {
+        const quantity = parseFloat(item.querySelector('.equipment-quantity').value) || 1;
+        const price = parseFloat(item.querySelector('.equipment-price').value) || 0;
+        const markup = parseFloat(item.querySelector('.equipment-markup').value) || 0;
+        const total = quantity * price * (1 + markup / 100);
+        item.querySelector('.equipment-total').value = `$${total.toFixed(2)}`;
+        equipmentSubtotal += total;
+    });
     
-    // Calculate labor total
-    const laborRate = parseFloat(document.getElementById('laborRate').value) || 0;
-    const laborHours = parseFloat(document.getElementById('laborHours').value) || 0;
-    const laborTotal = laborRate * laborHours;
+    // Update subtotals
+    document.getElementById('laborSubtotal').textContent = `$${laborSubtotal.toFixed(2)}`;
+    document.getElementById('equipmentSubtotal').textContent = `$${equipmentSubtotal.toFixed(2)}`;
     
-    // Update labor total display
-    document.getElementById('laborTotal').value = `$${laborTotal.toFixed(2)}`;
+    // Calculate tax
+    const subtotal = laborSubtotal + equipmentSubtotal;
+    const taxRate = appConfig?.taxRate || 0;
+    const taxAmount = subtotal * (taxRate / 100);
+    const grandTotal = subtotal + taxAmount;
     
-    // Calculate grand total
-    const grandTotal = partsTotal + laborTotal;
+    // Show/hide tax row
+    const taxRow = document.getElementById('taxRow');
+    if (taxAmount > 0) {
+        taxRow.style.display = 'flex';
+        document.getElementById('taxAmount').textContent = `$${taxAmount.toFixed(2)}`;
+    } else {
+        taxRow.style.display = 'none';
+    }
+    
+    // Update grand total
     document.getElementById('grandTotal').textContent = `$${grandTotal.toFixed(2)}`;
 }
 
-// PDF Generation
-async function generatePDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+// ===== VALIDATION =====
+function validateForm() {
+    const errors = [];
     
-    // Get form data
-    const companyName = document.getElementById('companyName').value || 'Company Name';
-    const companyLogoData = appConfig?.logoData || null; // Get logo from config
-    const companyAddress = document.getElementById('companyAddress').value;
-    const companyPhone = document.getElementById('companyPhone').value;
-    const companyEmail = document.getElementById('companyEmail').value;
-    const companyWebsite = document.getElementById('companyWebsite').value;
+    if (!appConfig || !appConfig.companyName) {
+        errors.push('Please configure company settings first.');
+    }
     
-    const jobName = document.getElementById('jobName').value || '';
-    const customerName = document.getElementById('customerName').value || 'Customer Name';
-    const customerAddress = document.getElementById('customerAddress').value;
-    const customerPhone = document.getElementById('customerPhone').value;
-    const customerEmail = document.getElementById('customerEmail').value;
+    const customerName = document.getElementById('customerName').value.trim();
+    if (!customerName) {
+        errors.push('Customer name is required.');
+    }
     
-    const quoteNumber = document.getElementById('quoteNumber').value || 'N/A';
-    const quoteDate = document.getElementById('quoteDate').value || new Date().toISOString().split('T')[0];
+    const scopeSummary = document.getElementById('scopeSummary').value.trim();
+    if (!scopeSummary) {
+        errors.push('Scope summary is required.');
+    }
     
-    const quoteNotes = document.getElementById('quoteNotes').value;
-    const termsAndConditions = document.getElementById('termsAndConditions').value;
+    const laborItems = document.querySelectorAll('#laborItemsContainer .line-item');
+    const equipmentItems = document.querySelectorAll('#equipmentItemsContainer .line-item');
     
-    // Header with Logo
+    if (laborItems.length === 0 && equipmentItems.length === 0) {
+        errors.push('Add at least one labor or equipment item.');
+    }
+    
+    // Validate labor items
+    laborItems.forEach((item, index) => {
+        const desc = item.querySelector('.labor-description').value.trim();
+        const hours = parseFloat(item.querySelector('.labor-hours').value);
+        const rate = parseFloat(item.querySelector('.labor-rate').value);
+        
+        if (!desc) errors.push(`Labor item ${index + 1}: Description required.`);
+        if (!hours || hours <= 0) errors.push(`Labor item ${index + 1}: Valid hours required.`);
+        if (!rate || rate <= 0) errors.push(`Labor item ${index + 1}: Valid rate required.`);
+    });
+    
+    // Validate equipment items
+    equipmentItems.forEach((item, index) => {
+        const desc = item.querySelector('.equipment-description').value.trim();
+        const quantity = parseFloat(item.querySelector('.equipment-quantity').value);
+        const price = parseFloat(item.querySelector('.equipment-price').value);
+        
+        if (!desc) errors.push(`Equipment item ${index + 1}: Description required.`);
+        if (!quantity || quantity <= 0) errors.push(`Equipment item ${index + 1}: Valid quantity required.`);
+        if (!price || price <= 0) errors.push(`Equipment item ${index + 1}: Valid price required.`);
+    });
+    
+    if (errors.length > 0) {
+        alert('Please fix the following errors:\n\n' + errors.join('\n'));
+        return false;
+    }
+    
+    return true;
+}
+
+// ===== PDF GENERATION =====
+function generatePDF() {
+    if (!validateForm()) return;
+    
+    // Check if jsPDF is loaded
+    if (typeof window.jspdf === 'undefined') {
+        alert('PDF library is loading. Please wait a moment and try again.');
+        return;
+    }
+    
+    try {
+        const { jsPDF } = window.jspdf;
+        if (!jsPDF) {
+            throw new Error('jsPDF library not loaded correctly');
+        }
+        const doc = new jsPDF();
     let yPos = 20;
     
-    // Add logo if available
-    if (companyLogoData) {
+    // Header with Logo
+    if (appConfig?.logoData) {
         try {
-            doc.addImage(companyLogoData, 'PNG', 150, yPos, 40, 20);
+            doc.addImage(appConfig.logoData, 'PNG', 150, yPos, 40, 20);
             yPos += 25;
         } catch (e) {
-            console.log('Error adding logo to PDF:', e);
-            yPos = 25;
+            console.log('Logo error:', e);
         }
-    } else {
-        yPos = 25;
+    }
+    
+    // Company Info
+    doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+    if (appConfig?.companyName) {
+        doc.text(appConfig.companyName, 150, yPos);
+        yPos += 6;
+    }
+    doc.setFont(undefined, 'normal');
+    if (appConfig?.companyAddress) {
+        const addrLines = doc.splitTextToSize(appConfig.companyAddress, 50);
+        addrLines.forEach(line => {
+            doc.text(line, 150, yPos);
+            yPos += 5;
+        });
+    }
+    if (appConfig?.companyPhone) {
+        doc.text(`Phone: ${appConfig.companyPhone}`, 150, yPos);
+        yPos += 5;
+    }
+    if (appConfig?.companyEmail) {
+        doc.text(`Email: ${appConfig.companyEmail}`, 150, yPos);
+        yPos += 5;
     }
     
     // Quote Title
+    yPos = 20;
     doc.setFontSize(20);
-    doc.setTextColor(102, 126, 234);
-    doc.text('QUOTE', 20, yPos);
+    doc.setTextColor(29, 29, 31);
+    doc.setFont(undefined, 'bold');
+    doc.text('PROPOSAL', 20, yPos);
     
-    // Company Information (Right side)
-    doc.setFontSize(12);
+    // Quote Info
+    yPos = 35;
+    doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
-    let companyYPos = companyLogoData ? 45 : 25;
-    
-    if (companyName) {
-        doc.setFont(undefined, 'bold');
-        doc.text(companyName, 150, companyYPos);
-        companyYPos += 7;
-    }
-    
-    doc.setFont(undefined, 'normal');
-    if (companyAddress) {
-        const addressLines = doc.splitTextToSize(companyAddress, 50);
-        addressLines.forEach(line => {
-            doc.text(line, 150, companyYPos);
-            companyYPos += 6;
-        });
-    }
-    
-    if (companyPhone) {
-        doc.text(`Phone: ${companyPhone}`, 150, companyYPos);
-        companyYPos += 6;
-    }
-    if (companyEmail) {
-        doc.text(`Email: ${companyEmail}`, 150, companyYPos);
-        companyYPos += 6;
-    }
-    if (companyWebsite) {
-        doc.text(`Website: ${companyWebsite}`, 150, companyYPos);
-        companyYPos += 6;
-    }
-    
-    // Quote Information
-    yPos = 50;
     doc.setFont(undefined, 'bold');
     doc.text('Quote To:', 20, yPos);
-    yPos += 7;
-    
+    yPos += 6;
     doc.setFont(undefined, 'normal');
+    
+    const customerName = document.getElementById('customerName').value;
+    const jobName = document.getElementById('jobName').value;
+    const jobsiteAddress = document.getElementById('jobsiteAddress').value;
+    
     if (jobName) {
         doc.setFont(undefined, 'bold');
         doc.text(`Job: ${jobName}`, 20, yPos);
-        yPos += 7;
+        yPos += 6;
         doc.setFont(undefined, 'normal');
     }
     if (customerName) {
         doc.text(customerName, 20, yPos);
-        yPos += 6;
+        yPos += 5;
     }
-    if (customerAddress) {
-        const addressLines = doc.splitTextToSize(customerAddress, 80);
-        addressLines.forEach(line => {
+    if (jobsiteAddress) {
+        yPos += 2;
+        doc.setFont(undefined, 'bold');
+        doc.text('Jobsite Address:', 20, yPos);
+        yPos += 5;
+        doc.setFont(undefined, 'normal');
+        const jobsiteLines = doc.splitTextToSize(jobsiteAddress, 80);
+        jobsiteLines.forEach(line => {
             doc.text(line, 20, yPos);
-            yPos += 6;
+            yPos += 5;
         });
     }
-    if (customerPhone) {
-        doc.text(`Phone: ${customerPhone}`, 20, yPos);
-        yPos += 6;
-    }
-    if (customerEmail) {
-        doc.text(`Email: ${customerEmail}`, 20, yPos);
-        yPos += 6;
-    }
     
-    // Quote Details
-    yPos += 5;
+    yPos += 3;
     doc.setFont(undefined, 'bold');
-    doc.text(`Quote Number: ${quoteNumber}`, 20, yPos);
-    yPos += 6;
-    doc.text(`Quote Date: ${formatDate(quoteDate)}`, 20, yPos);
+    doc.text(`Quote #: ${document.getElementById('quoteNumber').value}`, 20, yPos);
+    yPos += 5;
+    doc.text(`Date: ${formatDate(document.getElementById('quoteDate').value)}`, 20, yPos);
+    yPos += 5;
+    doc.text(`Valid Until: ${formatDate(document.getElementById('validUntil').value)}`, 20, yPos);
     yPos += 10;
     
-    let grandTotal = 0;
+    // Scope Summary
+    if (yPos > 250) { doc.addPage(); yPos = 20; }
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(12);
+    doc.text('SCOPE OF WORK', 20, yPos);
+    yPos += 8;
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(10);
+    const scopeLines = doc.splitTextToSize(document.getElementById('scopeSummary').value, 170);
+    scopeLines.forEach(line => {
+        if (yPos > 280) { doc.addPage(); yPos = 20; }
+        doc.text(line, 20, yPos);
+        yPos += 5;
+    });
+    yPos += 8;
     
-    // Parts Section
-    const partsMarkup = parseFloat(document.getElementById('partsMarkup').value) || 0;
-    let partsSubtotal = 0;
-    const partsLineItems = document.querySelectorAll('#partsLineItemsContainer .line-item');
+    // Labor Section
+    let laborSubtotal = 0;
+    let equipmentSubtotal = 0;
     
-    if (partsLineItems.length > 0) {
-        if (yPos > 250) {
-            doc.addPage();
-            yPos = 20;
-        }
-        
-        // Parts Section Header
+    const laborItems = document.querySelectorAll('#laborItemsContainer .line-item');
+    if (laborItems.length > 0) {
+        if (yPos > 240) { doc.addPage(); yPos = 20; }
         doc.setFont(undefined, 'bold');
         doc.setFontSize(12);
-        doc.text('Parts', 20, yPos);
+        doc.text('LABOR', 20, yPos);
         yPos += 8;
         
-        // Table Header (no prices shown - only total at end)
+        // Table Header
         doc.setFontSize(10);
-        doc.text('Item', 20, yPos);
-        doc.text('Description', 60, yPos);
-        doc.text('Qty', 150, yPos);
-        
-        yPos += 6;
+        doc.text('Description', 20, yPos);
+        doc.text('Hours', 130, yPos);
+        doc.text('Total', 170, yPos);
+        yPos += 5;
         doc.setLineWidth(0.5);
         doc.line(20, yPos, 190, yPos);
-        yPos += 5;
+        yPos += 6;
         
         doc.setFont(undefined, 'normal');
-        
-        // Process parts line items
-        partsLineItems.forEach(item => {
-            if (yPos > 250) {
-                doc.addPage();
-                yPos = 20;
-                // Redraw header
-                doc.setFont(undefined, 'bold');
-                doc.setFontSize(10);
-                doc.text('Item', 20, yPos);
-                doc.text('Description', 60, yPos);
-                doc.text('Qty', 150, yPos);
-                yPos += 6;
-                doc.setFont(undefined, 'normal');
-            }
+        laborItems.forEach(item => {
+            if (yPos > 280) { doc.addPage(); yPos = 20; doc.setFont(undefined, 'bold'); doc.text('LABOR (cont.)', 20, yPos); yPos += 8; doc.setFont(undefined, 'normal'); }
             
-            const partNumber = item.querySelector('.part-number').value || '';
-            const description = item.querySelector('.part-description').value || '';
-            const price = parseFloat(item.querySelector('.part-price').value) || 0;
-            const quantity = parseFloat(item.querySelector('.part-quantity').value) || 0;
-            const baseTotal = price * quantity;
-            partsSubtotal += baseTotal;
+            const desc = item.querySelector('.labor-description').value;
+            const hours = parseFloat(item.querySelector('.labor-hours').value) || 0;
+            const rate = parseFloat(item.querySelector('.labor-rate').value) || 0;
+            const total = hours * rate;
+            laborSubtotal += total;
             
-            const descLines = doc.splitTextToSize(description, 70);
-            const partLines = doc.splitTextToSize(partNumber, 30);
-            const maxLines = Math.max(descLines.length, partLines.length);
+            const descLines = doc.splitTextToSize(desc, 100);
+            doc.text(descLines[0], 20, yPos);
+            doc.text(hours.toFixed(2), 130, yPos);
+            doc.text(`$${total.toFixed(2)}`, 170, yPos);
             
-            // Show item (no prices - only description and quantity)
-            doc.text(partNumber || 'Item', 20, yPos);
-            doc.text(descLines[0] || '', 60, yPos);
-            doc.text(quantity.toString(), 150, yPos);
-            
-            if (maxLines > 1) {
-                for (let i = 1; i < maxLines; i++) {
+            if (descLines.length > 1) {
+                for (let i = 1; i < descLines.length; i++) {
                     yPos += 5;
-                    if (descLines[i]) doc.text(descLines[i], 60, yPos);
+                    doc.text(descLines[i], 20, yPos);
                 }
             }
-            
-            yPos += 8;
+            yPos += 7;
         });
         
-        // Parts total with markup (markup is hidden from customer)
-        const partsTotal = partsSubtotal * (1 + partsMarkup / 100);
-        
-        yPos += 3;
+        yPos += 2;
         doc.setLineWidth(0.3);
         doc.line(20, yPos, 190, yPos);
         yPos += 6;
         doc.setFont(undefined, 'bold');
-        // Only show final parts total - markup is hidden from customer
-        doc.text('Parts Total:', 120, yPos);
-        doc.text(`$${partsTotal.toFixed(2)}`, 160, yPos);
+        doc.text('Labor Subtotal:', 120, yPos);
+        doc.text(`$${laborSubtotal.toFixed(2)}`, 170, yPos);
         yPos += 10;
-        
-        grandTotal += partsTotal;
     }
     
-    // Labor Hours Section
-    const laborRate = parseFloat(document.getElementById('laborRate').value) || 0;
-    const laborHours = parseFloat(document.getElementById('laborHours').value) || 0;
-    const laborTotal = laborRate * laborHours;
-    
-    if (laborHours > 0 && laborRate > 0) {
-        if (yPos > 250) {
-            doc.addPage();
-            yPos = 20;
-        }
-        
+    // Equipment Section
+    const equipmentItems = document.querySelectorAll('#equipmentItemsContainer .line-item');
+    if (equipmentItems.length > 0) {
+        if (yPos > 240) { doc.addPage(); yPos = 20; }
         doc.setFont(undefined, 'bold');
         doc.setFontSize(12);
-        doc.text('Labor Hours', 20, yPos);
+        doc.text('EQUIPMENT', 20, yPos);
         yPos += 8;
         
-        doc.setFont(undefined, 'normal');
+        // Table Header
         doc.setFontSize(10);
-        doc.text(`Hourly Rate: $${laborRate.toFixed(2)}/hr`, 20, yPos);
-        yPos += 6;
-        doc.text(`Hours: ${laborHours}`, 20, yPos);
+        doc.text('Description', 20, yPos);
+        doc.text('Qty', 110, yPos);
+        doc.text('Total', 150, yPos);
+        yPos += 5;
+        doc.setLineWidth(0.5);
+        doc.line(20, yPos, 190, yPos);
         yPos += 6;
         
+        doc.setFont(undefined, 'normal');
+        equipmentItems.forEach(item => {
+            if (yPos > 280) { doc.addPage(); yPos = 20; doc.setFont(undefined, 'bold'); doc.text('EQUIPMENT (cont.)', 20, yPos); yPos += 8; doc.setFont(undefined, 'normal'); }
+            
+            const desc = item.querySelector('.equipment-description').value;
+            const quantity = parseFloat(item.querySelector('.equipment-quantity').value) || 1;
+            const price = parseFloat(item.querySelector('.equipment-price').value) || 0;
+            const markup = parseFloat(item.querySelector('.equipment-markup').value) || 0;
+            const total = quantity * price * (1 + markup / 100);
+            equipmentSubtotal += total;
+            
+            const descLines = doc.splitTextToSize(desc, 90);
+            doc.text(descLines[0], 20, yPos);
+            doc.text(quantity.toString(), 110, yPos);
+            doc.text(`$${total.toFixed(2)}`, 150, yPos);
+            
+            if (descLines.length > 1) {
+                for (let i = 1; i < descLines.length; i++) {
+                    yPos += 5;
+                    doc.text(descLines[i], 20, yPos);
+                }
+            }
+            yPos += 7;
+        });
+        
+        yPos += 2;
+        doc.setLineWidth(0.3);
+        doc.line(20, yPos, 190, yPos);
+        yPos += 6;
         doc.setFont(undefined, 'bold');
-        doc.text('Labor Total:', 120, yPos);
-        doc.text(`$${laborTotal.toFixed(2)}`, 160, yPos);
-        yPos += 10;
-        
-        grandTotal += laborTotal;
-    }
-    
-    // Summary Section
-    if (yPos > 240) {
-        doc.addPage();
-        yPos = 20;
-    }
-    
+        doc.text('Equipment Subtotal:', 120, yPos);
+        doc.text(`$${equipmentSubtotal.toFixed(2)}`, 170, yPos);
     yPos += 10;
+    }
+    
+    // Totals
+    if (yPos > 250) { doc.addPage(); yPos = 20; }
+    yPos += 5;
     doc.setLineWidth(0.5);
     doc.line(20, yPos, 190, yPos);
     yPos += 8;
+    
+    const subtotal = laborSubtotal + equipmentSubtotal;
+    const taxRate = appConfig?.taxRate || 0;
+    const taxAmount = subtotal * (taxRate / 100);
+    const grandTotal = subtotal + taxAmount;
     
     doc.setFont(undefined, 'bold');
     doc.setFontSize(11);
     doc.text('QUOTE SUMMARY', 20, yPos);
     yPos += 10;
     
-    doc.setFontSize(12);
-    const primaryColor = appConfig?.colorScheme ? getColorScheme(appConfig.colorScheme).primary : '#667eea';
-    const rgb = hexToRgb(primaryColor);
-    doc.setTextColor(rgb.r, rgb.g, rgb.b);
-    doc.setFont(undefined, 'bold');
-    doc.text('GRAND TOTAL:', 20, yPos);
-    doc.text(`$${grandTotal.toFixed(2)}`, 160, yPos);
+    doc.setFontSize(10);
+    doc.text('Labor Subtotal:', 120, yPos);
+    doc.text(`$${laborSubtotal.toFixed(2)}`, 170, yPos);
+    yPos += 6;
     
-    // Notes
-    if (quoteNotes) {
-        yPos += 15;
-        if (yPos > 250) {
-            doc.addPage();
-            yPos = 20;
-        }
-        doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0);
-        doc.setFont(undefined, 'bold');
-        doc.text('Notes / Scope Description:', 20, yPos);
+    doc.text('Equipment Subtotal:', 120, yPos);
+    doc.text(`$${equipmentSubtotal.toFixed(2)}`, 170, yPos);
+    yPos += 6;
+    
+    if (taxAmount > 0) {
+        doc.text(`Tax (${taxRate}%):`, 120, yPos);
+        doc.text(`$${taxAmount.toFixed(2)}`, 170, yPos);
         yPos += 6;
-        doc.setFont(undefined, 'normal');
-        const noteLines = doc.splitTextToSize(quoteNotes, 170);
-        noteLines.forEach(line => {
-            if (yPos > 280) {
-                doc.addPage();
-                yPos = 20;
-            }
-            doc.text(line, 20, yPos);
-            yPos += 6;
-        });
     }
     
-    // Terms and Conditions
-    if (termsAndConditions) {
-        yPos += 15;
-        if (yPos > 250) {
-            doc.addPage();
-            yPos = 20;
-        }
+    doc.setFontSize(14);
+    doc.setTextColor(29, 29, 31);
+    doc.text('GRAND TOTAL:', 120, yPos);
+    doc.text(`$${grandTotal.toFixed(2)}`, 170, yPos);
+    yPos += 12;
+    
+    // Notes
+    const notes = document.getElementById('notes').value.trim();
+    if (notes) {
+        if (yPos > 250) { doc.addPage(); yPos = 20; }
         doc.setFontSize(10);
         doc.setTextColor(0, 0, 0);
         doc.setFont(undefined, 'bold');
-        doc.text('Terms and Conditions:', 20, yPos);
+        doc.text('NOTES & ASSUMPTIONS:', 20, yPos);
         yPos += 6;
         doc.setFont(undefined, 'normal');
-        const termsLines = doc.splitTextToSize(termsAndConditions, 170);
-        termsLines.forEach(line => {
-            if (yPos > 280) {
-                doc.addPage();
-                yPos = 20;
-            }
+        const noteLines = doc.splitTextToSize(notes, 170);
+        noteLines.forEach(line => {
+            if (yPos > 280) { doc.addPage(); yPos = 20; }
             doc.text(line, 20, yPos);
-            yPos += 6;
+            yPos += 5;
+        });
+        yPos += 5;
+    }
+    
+    // Exclusions
+    const exclusions = document.getElementById('exclusions').value.trim();
+    if (exclusions) {
+        if (yPos > 250) { doc.addPage(); yPos = 20; }
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.text('EXCLUSIONS:', 20, yPos);
+        yPos += 6;
+        doc.setFont(undefined, 'normal');
+        const exclLines = doc.splitTextToSize(exclusions, 170);
+        exclLines.forEach(line => {
+            if (yPos > 280) { doc.addPage(); yPos = 20; }
+            doc.text(line, 20, yPos);
+            yPos += 5;
         });
     }
     
@@ -840,45 +1066,439 @@ async function generatePDF() {
         doc.setPage(i);
         doc.setFontSize(8);
         doc.setTextColor(128, 128, 128);
-        doc.text(`Page ${i} of ${pageCount}`, 100, 285, { align: 'center' });
+        doc.text(`Page ${i} of ${pageCount}`, 105, 285, { align: 'center' });
     }
     
-    // Deduct inventory before saving PDF
-    await deductInventoryFromQuote();
-    
     // Save PDF
-    const fileName = `Quote_${quoteNumber}_${formatDate(quoteDate).replace(/\//g, '-')}.pdf`;
+    const fileName = `Quote_${document.getElementById('quoteNumber').value}_${formatDate(document.getElementById('quoteDate').value).replace(/\//g, '-')}.pdf`;
     doc.save(fileName);
+    } catch (error) {
+        console.error('PDF Generation Error:', error);
+        console.error('Error details:', error.message, error.stack);
+        
+        // More specific error messages
+        let errorMsg = 'Error generating PDF.\n\n';
+        if (error.message) {
+            errorMsg += `Error: ${error.message}\n\n`;
+        }
+        errorMsg += 'Please check:\n';
+        errorMsg += '1. All required fields are filled\n';
+        errorMsg += '2. Browser console (F12) for details\n';
+        errorMsg += '3. Internet connection (for PDF library)';
+        
+        alert(errorMsg);
+    }
 }
 
-// Utility Functions
+// ===== QUOTE MANAGEMENT =====
+function saveCurrentQuote() {
+    if (!validateForm()) {
+        alert('Please fix form errors before saving.');
+        return;
+    }
+    
+    const quoteData = captureQuoteData();
+    const quoteNumber = quoteData.quoteNumber;
+    
+    // Find existing quote or create new
+    let quote = savedQuotes.find(q => q.quoteNumber === quoteNumber);
+    
+    if (!quote) {
+        // New quote
+        quote = {
+            quoteNumber: quoteNumber,
+            createdAt: new Date().toISOString(),
+            revisions: [],
+            approved: false,
+            approvedAt: null,
+            approvedRevision: null
+        };
+        savedQuotes.push(quote);
+    }
+    
+    // Add new revision
+    const revision = {
+        revisionNumber: quote.revisions.length + 1,
+        savedAt: new Date().toISOString(),
+        data: quoteData,
+        notes: prompt('Add revision notes (optional):') || ''
+    };
+    
+    quote.revisions.push(revision);
+    quote.lastModified = new Date().toISOString();
+    quote.customerName = quoteData.customerName;
+    quote.jobName = quoteData.jobName;
+    
+    saveSavedQuotes();
+    alert(`Quote ${quoteNumber} saved as revision ${revision.revisionNumber}!`);
+}
+
+function captureQuoteData() {
+    // Capture all form data
+    const laborItems = [];
+    document.querySelectorAll('#laborItemsContainer .line-item').forEach(item => {
+        laborItems.push({
+            description: item.querySelector('.labor-description').value,
+            hours: parseFloat(item.querySelector('.labor-hours').value) || 0,
+            rate: parseFloat(item.querySelector('.labor-rate').value) || 0,
+            total: parseFloat(item.querySelector('.labor-total').value.replace('$', '').replace(',', '')) || 0
+        });
+    });
+    
+    const equipmentItems = [];
+    document.querySelectorAll('#equipmentItemsContainer .line-item').forEach(item => {
+        equipmentItems.push({
+            description: item.querySelector('.equipment-description').value,
+            quantity: parseFloat(item.querySelector('.equipment-quantity').value) || 1,
+            price: parseFloat(item.querySelector('.equipment-price').value) || 0,
+            markup: parseFloat(item.querySelector('.equipment-markup').value) || 0,
+            total: parseFloat(item.querySelector('.equipment-total').value.replace('$', '').replace(',', '')) || 0,
+            inventoryId: item.querySelector('.equipment-inventory-id').value || ''
+        });
+    });
+    
+    return {
+        quoteNumber: document.getElementById('quoteNumber').value,
+        quoteDate: document.getElementById('quoteDate').value,
+        validUntil: document.getElementById('validUntil').value,
+        customerName: document.getElementById('customerName').value,
+        jobName: document.getElementById('jobName').value,
+        jobsiteAddress: document.getElementById('jobsiteAddress').value,
+        scopeSummary: document.getElementById('scopeSummary').value,
+        notes: document.getElementById('notes').value,
+        exclusions: document.getElementById('exclusions').value,
+        laborItems: laborItems,
+        equipmentItems: equipmentItems,
+        laborSubtotal: parseFloat(document.getElementById('laborSubtotal').textContent.replace('$', '').replace(',', '')) || 0,
+        equipmentSubtotal: parseFloat(document.getElementById('equipmentSubtotal').textContent.replace('$', '').replace(',', '')) || 0,
+        taxAmount: parseFloat(document.getElementById('taxAmount')?.textContent.replace('$', '').replace(',', '') || '0') || 0,
+        grandTotal: parseFloat(document.getElementById('grandTotal').textContent.replace('$', '').replace(',', '')) || 0
+    };
+}
+
+function loadQuoteData(quoteData) {
+    // Load quote data into form
+    document.getElementById('quoteNumber').value = quoteData.quoteNumber;
+    document.getElementById('quoteDate').value = quoteData.quoteDate;
+    document.getElementById('validUntil').value = quoteData.validUntil;
+    document.getElementById('customerName').value = quoteData.customerName;
+    document.getElementById('jobName').value = quoteData.jobName || '';
+    document.getElementById('jobsiteAddress').value = quoteData.jobsiteAddress || '';
+    document.getElementById('scopeSummary').value = quoteData.scopeSummary;
+    document.getElementById('notes').value = quoteData.notes || '';
+    document.getElementById('exclusions').value = quoteData.exclusions || '';
+    
+    // Clear existing items
+    document.getElementById('laborItemsContainer').innerHTML = '';
+    document.getElementById('equipmentItemsContainer').innerHTML = '';
+    laborItemCounter = 0;
+    equipmentItemCounter = 0;
+    
+    // Load labor items
+    if (quoteData.laborItems) {
+        quoteData.laborItems.forEach(item => {
+            addLaborItem();
+            const lastItem = document.querySelector('#laborItemsContainer .line-item:last-child');
+            lastItem.querySelector('.labor-description').value = item.description;
+            lastItem.querySelector('.labor-hours').value = item.hours;
+            lastItem.querySelector('.labor-rate').value = item.rate;
+        });
+    }
+    
+    // Load equipment items
+    if (quoteData.equipmentItems) {
+        quoteData.equipmentItems.forEach(item => {
+            addEquipmentItem();
+            const lastItem = document.querySelector('#equipmentItemsContainer .line-item:last-child');
+            lastItem.querySelector('.equipment-description').value = item.description;
+            lastItem.querySelector('.equipment-quantity').value = item.quantity || 1;
+            lastItem.querySelector('.equipment-price').value = item.price;
+            lastItem.querySelector('.equipment-markup').value = item.markup || 0;
+            if (item.inventoryId) {
+                lastItem.querySelector('.equipment-inventory-id').value = item.inventoryId;
+            }
+        });
+    }
+    
+    updateCalculations();
+    showPage('proposal');
+}
+
+function showQuotesPage() {
+    showPage('quotes');
+    renderQuotesList();
+}
+
+function renderQuotesList() {
+    const container = document.getElementById('quotesList');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (savedQuotes.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #86868b; padding: 40px;">No saved quotes yet. Save a quote from the proposal form to see it here.</p>';
+        return;
+    }
+    
+    // Sort quotes by last modified (newest first)
+    const sortedQuotes = [...savedQuotes].sort((a, b) => {
+        return new Date(b.lastModified || b.createdAt) - new Date(a.lastModified || a.createdAt);
+    });
+    
+    sortedQuotes.forEach(quote => {
+        const quoteDiv = document.createElement('div');
+        quoteDiv.style.marginBottom = '24px';
+        quoteDiv.style.padding = '20px';
+        quoteDiv.style.backgroundColor = '#ffffff';
+        quoteDiv.style.border = '1px solid #d2d2d7';
+        quoteDiv.style.borderRadius = '12px';
+        
+        const latestRevision = quote.revisions[quote.revisions.length - 1];
+        const revisionCount = quote.revisions.length;
+        const isApproved = quote.approved && quote.approvedRevision === revisionCount;
+        const approvalStatus = isApproved 
+            ? `<span style="background: #34c759; color: white; padding: 4px 12px; border-radius: 6px; font-size: 0.875em; font-weight: 600;">✓ Approved</span>`
+            : `<span style="background: #f5f5f7; color: #86868b; padding: 4px 12px; border-radius: 6px; font-size: 0.875em;">Pending</span>`;
+        
+        quoteDiv.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
+                <div>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                        <h3 style="margin: 0; font-size: 1.25em;">${quote.quoteNumber}</h3>
+                        ${approvalStatus}
+                    </div>
+                    <p style="margin: 4px 0; color: #86868b;">${quote.customerName || 'Unknown Customer'}</p>
+                    ${quote.jobName ? `<p style="margin: 4px 0; color: #86868b;">Job: ${quote.jobName}</p>` : ''}
+                    <p style="margin: 4px 0; color: #86868b; font-size: 0.875em;">
+                        Created: ${formatDate(quote.createdAt.split('T')[0])} | 
+                        Revisions: ${revisionCount}
+                        ${isApproved ? ` | Approved: ${formatDate(quote.approvedAt.split('T')[0])}` : ''}
+                    </p>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    ${!isApproved ? `<button type="button" onclick="approveQuote('${quote.quoteNumber}')" 
+                            style="background: #34c759; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.875em; font-weight: 600;">✓ Approve Quote</button>` : ''}
+                    <button type="button" onclick="loadQuoteRevision('${quote.quoteNumber}', ${revisionCount - 1})" 
+                            class="btn-primary" style="padding: 8px 16px; font-size: 0.875em;">Load Latest</button>
+                    <button type="button" onclick="deleteQuote('${quote.quoteNumber}')" 
+                            style="background: #ff3b30; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.875em;">Delete</button>
+                </div>
+            </div>
+            <div style="border-top: 1px solid #f5f5f7; padding-top: 16px;">
+                <strong style="display: block; margin-bottom: 12px; color: #1d1d1f;">Revisions:</strong>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    ${quote.revisions.map((rev, index) => {
+                        const isThisApproved = quote.approved && quote.approvedRevision === rev.revisionNumber;
+                        return `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: ${isThisApproved ? '#e8f5e9' : '#f5f5f7'}; border-radius: 8px; ${isThisApproved ? 'border: 2px solid #34c759;' : ''}">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <strong>Revision ${rev.revisionNumber}</strong>
+                                    ${isThisApproved ? `<span style="background: #34c759; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; font-weight: 600;">APPROVED</span>` : ''}
+                                </div>
+                                <span style="color: #86868b; font-size: 0.875em; margin-left: 0;">
+                                    ${formatDate(rev.savedAt.split('T')[0])} ${new Date(rev.savedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                ${rev.notes ? `<div style="color: #86868b; font-size: 0.875em; margin-top: 4px;">${rev.notes}</div>` : ''}
+                                <div style="color: #86868b; font-size: 0.875em; margin-top: 4px;">
+                                    Total: $${rev.data.grandTotal.toFixed(2)}
+                                </div>
+                            </div>
+                            <button type="button" onclick="loadQuoteRevision('${quote.quoteNumber}', ${index})" 
+                                    style="background: #0071e3; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.875em;">Load</button>
+                        </div>
+                    `;
+                    }).reverse().join('')}
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(quoteDiv);
+    });
+}
+
+function loadQuoteRevision(quoteNumber, revisionIndex) {
+    const quote = savedQuotes.find(q => q.quoteNumber === quoteNumber);
+    if (!quote || !quote.revisions[revisionIndex]) {
+        alert('Quote revision not found.');
+        return;
+    }
+    
+    if (confirm('Load this quote revision? Current form data will be replaced.')) {
+        loadQuoteData(quote.revisions[revisionIndex].data);
+    }
+}
+
+function approveQuote(quoteNumber) {
+    const quote = savedQuotes.find(q => q.quoteNumber === quoteNumber);
+    if (!quote || quote.revisions.length === 0) {
+        alert('Quote not found or has no revisions.');
+        return;
+    }
+    
+    const latestRevision = quote.revisions[quote.revisions.length - 1];
+    const revisionNumber = latestRevision.revisionNumber;
+    
+    // Check if already approved for this revision
+    if (quote.approved && quote.approvedRevision === revisionNumber) {
+        if (!confirm('This quote revision is already approved.\n\nDo you want to approve it again? (This will reduce inventory stock again)')) {
+            return;
+        }
+    }
+    
+    if (!confirm(`Approve quote ${quoteNumber} (Revision ${revisionNumber})?\n\nThis will reduce inventory stock for all equipment items in this quote.`)) {
+        return;
+    }
+    
+    // Process equipment items and reduce inventory
+    const equipmentItems = latestRevision.data.equipmentItems || [];
+    const stockReductions = [];
+    const skippedItems = [];
+    let hasErrors = false;
+    const errors = [];
+    
+    equipmentItems.forEach(item => {
+        if (item.inventoryId) {
+            // Find inventory item by ID
+            const invItem = inventory.find(inv => inv.id === item.inventoryId);
+            if (invItem) {
+                const quantity = item.quantity || 1;
+                if (invItem.stock >= quantity) {
+                    invItem.stock -= quantity;
+                    stockReductions.push({
+                        name: invItem.name,
+                        quantity: quantity,
+                        remaining: invItem.stock
+                    });
+                } else {
+                    hasErrors = true;
+                    errors.push(`${invItem.name}: Insufficient stock (${invItem.stock} available, ${quantity} needed)`);
+                }
+            } else {
+                skippedItems.push(item.description || 'Unknown item');
+            }
+        } else {
+            // Equipment item not linked to inventory - skip stock reduction
+            skippedItems.push(item.description || 'Unknown item');
+        }
+    });
+    
+    if (hasErrors) {
+        alert('Cannot approve quote due to insufficient inventory:\n\n' + errors.join('\n'));
+        return;
+    }
+    
+    // Mark quote as approved
+    quote.approved = true;
+    quote.approvedAt = new Date().toISOString();
+    quote.approvedRevision = revisionNumber;
+    
+    // Save changes
+    saveInventory();
+    saveSavedQuotes();
+    renderQuotesList();
+    renderInventoryList();
+    
+    // Show success message
+    let message = `Quote ${quoteNumber} approved!\n\n`;
+    if (stockReductions.length > 0) {
+        message += 'Inventory updated:\n';
+        stockReductions.forEach(reduction => {
+            message += `• ${reduction.name}: -${reduction.quantity} (${reduction.remaining} remaining)\n`;
+        });
+    }
+    if (skippedItems.length > 0) {
+        message += `\nNote: ${skippedItems.length} equipment item(s) were not linked to inventory and stock was not reduced.`;
+    }
+    if (stockReductions.length === 0 && skippedItems.length === 0) {
+        message += '(No equipment items in this quote)';
+    }
+    alert(message);
+}
+
+function deleteQuote(quoteNumber) {
+    if (!confirm(`Delete quote ${quoteNumber} and all its revisions? This cannot be undone.`)) {
+        return;
+    }
+    
+    savedQuotes = savedQuotes.filter(q => q.quoteNumber !== quoteNumber);
+    saveSavedQuotes();
+    renderQuotesList();
+    alert('Quote deleted.');
+}
+
+function exportAllQuotes() {
+    const data = {
+        quotes: savedQuotes,
+        exportDate: new Date().toISOString(),
+        version: '1.0'
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `quotes-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    alert('All quotes exported!');
+}
+
+function importQuotes() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                
+                if (data.quotes && Array.isArray(data.quotes)) {
+                    if (confirm(`Import ${data.quotes.length} quote(s)? This will merge with existing quotes.`)) {
+                        // Merge quotes (update existing, add new)
+                        data.quotes.forEach(importedQuote => {
+                            const existingIndex = savedQuotes.findIndex(q => q.quoteNumber === importedQuote.quoteNumber);
+                            if (existingIndex >= 0) {
+                                // Merge revisions
+                                const existing = savedQuotes[existingIndex];
+                                importedQuote.revisions.forEach(rev => {
+                                    if (!existing.revisions.find(r => r.savedAt === rev.savedAt)) {
+                                        existing.revisions.push(rev);
+                                    }
+                                });
+                                existing.revisions.sort((a, b) => a.revisionNumber - b.revisionNumber);
+                                existing.lastModified = importedQuote.lastModified || existing.lastModified;
+                            } else {
+                                savedQuotes.push(importedQuote);
+                            }
+                        });
+                        
+                        saveSavedQuotes();
+                        renderQuotesList();
+                        alert('Quotes imported successfully!');
+                    }
+                } else {
+                    alert('Invalid quotes file format.');
+                }
+            } catch (error) {
+                console.error('Import error:', error);
+                alert('Error importing quotes. Please check the file format.');
+            }
+        }
+    };
+    input.click();
+}
+
+// ===== UTILITIES =====
 function formatDate(dateString) {
     if (!dateString) return '';
     const date = new Date(dateString + 'T00:00:00');
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-}
-
-function getColorScheme(schemeName) {
-    const colorSchemes = {
-        purple: { primary: '#667eea', secondary: '#764ba2' },
-        blue: { primary: '#4facfe', secondary: '#00f2fe' },
-        green: { primary: '#43e97b', secondary: '#38f9d7' },
-        red: { primary: '#fa709a', secondary: '#fee140' },
-        orange: { primary: '#fad961', secondary: '#f76b1c' },
-        teal: { primary: '#30cfd0', secondary: '#330867' },
-        navy: { primary: '#1e3c72', secondary: '#2a5298' },
-        burgundy: { primary: '#eb3349', secondary: '#f45c43' }
-    };
-    return colorSchemes[schemeName] || colorSchemes.purple;
-}
-
-function hexToRgb(hex) {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-    } : { r: 102, g: 126, b: 234 };
 }
 
 function generateQuoteNumber() {
@@ -890,312 +1510,759 @@ function generateQuoteNumber() {
     return `QT-${year}${month}${day}-${random}`;
 }
 
-// Form Management
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 function clearForm() {
-    if (confirm('Are you sure you want to clear all form data?')) {
-        document.querySelector('form')?.reset();
-        document.getElementById('partsLineItemsContainer').innerHTML = '';
-        document.getElementById('laborRate').value = appConfig?.defaultLaborRate || 0;
-        document.getElementById('laborHours').value = 0;
-        document.getElementById('partsMarkup').value = appConfig?.defaultMarkup || 0;
-        document.getElementById('quoteDate').value = new Date().toISOString().split('T')[0];
-        document.getElementById('quoteNumber').value = generateQuoteNumber();
-        addPartLineItem();
-        updateCalculations();
+    if (confirm('Create a new quote? This will clear all current data.')) {
+        document.getElementById('quoteForm').querySelector('form')?.reset();
+        document.getElementById('laborItemsContainer').innerHTML = '';
+        document.getElementById('equipmentItemsContainer').innerHTML = '';
+        laborItemCounter = 0;
+        equipmentItemCounter = 0;
+        initializeQuote();
     }
 }
 
-async function saveDraft() {
-    const draft = {
-        companyName: document.getElementById('companyName').value,
-        companyAddress: document.getElementById('companyAddress').value,
-        companyPhone: document.getElementById('companyPhone').value,
-        companyEmail: document.getElementById('companyEmail').value,
-        companyWebsite: document.getElementById('companyWebsite').value,
-        jobName: document.getElementById('jobName').value,
-        customerName: document.getElementById('customerName').value,
-        customerAddress: document.getElementById('customerAddress').value,
-        customerPhone: document.getElementById('customerPhone').value,
-        customerEmail: document.getElementById('customerEmail').value,
-        quoteNumber: document.getElementById('quoteNumber').value,
-        quoteDate: document.getElementById('quoteDate').value,
-        quoteNotes: document.getElementById('quoteNotes').value,
-        termsAndConditions: document.getElementById('termsAndConditions').value,
-        partsMarkup: document.getElementById('partsMarkup').value,
-        laborRate: document.getElementById('laborRate').value,
-        laborHours: document.getElementById('laborHours').value,
-        parts: []
-    };
+// ===== INVENTORY MANAGEMENT =====
+function showInventoryManager() {
+    showPage('inventory');
+    renderCategoriesList();
+    renderInventoryList();
+}
+
+function closeInventoryManager() {
+    // Not needed with new navigation, but keep for compatibility
+}
+
+function renderInventoryList() {
+    const container = document.getElementById('inventoryList');
+    const searchTerm = document.getElementById('inventorySearch')?.value.toLowerCase() || '';
+    const categoryFilter = document.getElementById('inventoryCategoryFilter')?.value || 'all';
     
-    // Save parts line items
-    document.querySelectorAll('#partsLineItemsContainer .line-item').forEach(item => {
-        draft.parts.push({
-            partNumber: item.querySelector('.part-number').value,
-            description: item.querySelector('.part-description').value,
-            price: item.querySelector('.part-price').value,
-            quantity: item.querySelector('.part-quantity').value
-        });
+    container.innerHTML = '';
+    
+    // Add search and filter UI if not exists
+    if (!document.getElementById('inventorySearch')) {
+        const searchDiv = document.createElement('div');
+        searchDiv.style.marginBottom = '20px';
+        searchDiv.innerHTML = `
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <input type="text" id="inventorySearch" placeholder="🔍 Search inventory..." 
+                       style="flex: 1; min-width: 200px; padding: 12px 16px; border: 1px solid #d2d2d7; border-radius: 10px; font-size: 1em;"
+                       oninput="renderInventoryList()">
+                <select id="inventoryCategoryFilter" onchange="renderInventoryList()" 
+                        style="padding: 12px 16px; border: 1px solid #d2d2d7; border-radius: 10px; font-size: 1em; background: white;">
+                    <option value="all">All Categories</option>
+                </select>
+                <select id="inventorySortBy" onchange="renderInventoryList()" 
+                        style="padding: 12px 16px; border: 1px solid #d2d2d7; border-radius: 10px; font-size: 1em; background: white;">
+                    <option value="name">Sort by Name</option>
+                    <option value="category">Sort by Category</option>
+                    <option value="price">Sort by Price</option>
+                    <option value="stock">Sort by Stock</option>
+                </select>
+            </div>
+        `;
+        container.parentElement.insertBefore(searchDiv, container);
+        updateCategoryDropdowns(); // Populate the filter dropdown
+    }
+    
+    // Filter inventory
+    let filteredInventory = inventory.filter(item => {
+        const matchesSearch = !searchTerm || 
+            item.name.toLowerCase().includes(searchTerm) ||
+            item.model.toLowerCase().includes(searchTerm) ||
+            item.description.toLowerCase().includes(searchTerm);
+        const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
+        return matchesSearch && matchesCategory;
     });
     
-    localStorage.setItem('quoteDraft', JSON.stringify(draft));
+    // Sort inventory
+    const sortBy = document.getElementById('inventorySortBy')?.value || 'name';
+    filteredInventory.sort((a, b) => {
+        if (sortBy === 'name') return a.name.localeCompare(b.name);
+        if (sortBy === 'category') return a.category.localeCompare(b.category);
+        if (sortBy === 'price') return b.price - a.price;
+        if (sortBy === 'stock') return b.stock - a.stock;
+        return 0;
+    });
     
-    // Also save to cloud if enabled
-    if (autoSync) {
-        try {
-            await saveDraftToCloud(draft);
-        } catch (e) {
-            console.log('Could not save draft to cloud:', e);
-        }
-    }
-    
-    alert('Draft saved successfully!');
-}
-
-async function saveDraftToCloud(draft) {
-    const data = {
-        partsLibrary: partsLibrary,
-        draft: draft,
-        lastUpdated: new Date().toISOString()
-    };
-    await saveToCloudFile(data);
-}
-
-function loadDraft() {
-    const draft = localStorage.getItem('quoteDraft');
-    if (!draft) {
-        alert('No saved draft found.');
+    if (filteredInventory.length === 0) {
+        container.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">No items found. Try adjusting your search or filters.</p>';
         return;
     }
     
-    if (confirm('Load saved draft? This will replace current form data.')) {
-        const data = JSON.parse(draft);
+    filteredInventory.forEach(item => {
+        const finalPrice = calculateFinalPrice(item);
+        const stockClass = item.stock <= 2 ? 'low-stock' : item.stock <= 5 ? 'medium-stock' : 'good-stock';
         
-        document.getElementById('companyName').value = data.companyName || '';
-        document.getElementById('companyAddress').value = data.companyAddress || '';
-        document.getElementById('companyPhone').value = data.companyPhone || '';
-        document.getElementById('companyEmail').value = data.companyEmail || '';
-        document.getElementById('companyWebsite').value = data.companyWebsite || '';
-        document.getElementById('jobName').value = data.jobName || '';
-        document.getElementById('customerName').value = data.customerName || '';
-        document.getElementById('customerAddress').value = data.customerAddress || '';
-        document.getElementById('customerPhone').value = data.customerPhone || '';
-        document.getElementById('customerEmail').value = data.customerEmail || '';
-        document.getElementById('quoteNumber').value = data.quoteNumber || generateQuoteNumber();
-        document.getElementById('quoteDate').value = data.quoteDate || new Date().toISOString().split('T')[0];
-        document.getElementById('quoteNotes').value = data.quoteNotes || '';
-        document.getElementById('termsAndConditions').value = data.termsAndConditions || '';
-        
-        // Load parts markup and labor
-        if (data.partsMarkup !== undefined) {
-            document.getElementById('partsMarkup').value = data.partsMarkup || 0;
-        }
-        if (data.laborRate !== undefined) {
-            document.getElementById('laborRate').value = data.laborRate || 0;
-        }
-        if (data.laborHours !== undefined) {
-            document.getElementById('laborHours').value = data.laborHours || 0;
-        }
-        
-        // Clear existing parts
-        document.getElementById('partsLineItemsContainer').innerHTML = '';
-        
-        // Load parts (new format)
-        if (data.parts && data.parts.length > 0) {
-            data.parts.forEach(itemData => {
-                addPartLineItem();
-                const lastItem = document.querySelector('#partsLineItemsContainer .line-item:last-child');
-                lastItem.querySelector('.part-number').value = itemData.partNumber || '';
-                lastItem.querySelector('.part-description').value = itemData.description || '';
-                lastItem.querySelector('.part-price').value = itemData.price || '';
-                lastItem.querySelector('.part-quantity').value = itemData.quantity || '1';
-            });
-        } else if (data.customSections && data.customSections.length > 0) {
-            // Legacy format - load from custom sections
-            data.customSections.forEach(sectionData => {
-                if (sectionData.pricingType === 'parts-markup' || sectionData.pricingType === 'parts-only') {
-                    document.getElementById('partsMarkup').value = sectionData.markup || 0;
-                    sectionData.lineItems.forEach(itemData => {
-                        addPartLineItem();
-                        const lastItem = document.querySelector('#partsLineItemsContainer .line-item:last-child');
-                        lastItem.querySelector('.part-number').value = itemData.partNumber || '';
-                        lastItem.querySelector('.part-description').value = itemData.description || '';
-                        lastItem.querySelector('.part-price').value = itemData.price || '';
-                        lastItem.querySelector('.part-quantity').value = itemData.quantity || '1';
-                    });
-                }
-            });
-        } else if (data.lineItems) {
-            // Very old legacy format
-            data.lineItems.forEach(itemData => {
-                addPartLineItem();
-                const lastItem = document.querySelector('#partsLineItemsContainer .line-item:last-child');
-                lastItem.querySelector('.part-number').value = itemData.partNumber || '';
-                lastItem.querySelector('.part-description').value = itemData.description || '';
-                lastItem.querySelector('.part-price').value = itemData.price || '';
-                lastItem.querySelector('.part-quantity').value = itemData.quantity || '1';
-            });
-        } else {
-            // No parts, just add one empty line item
-            addPartLineItem();
-        }
-        
-        updateCalculations();
-    }
-}
-
-// Parts Library Modal
-function showPartsLibrary() {
-    const modal = document.getElementById('partsLibraryModal');
-    const listDiv = document.getElementById('partsLibraryList');
-    
-    listDiv.innerHTML = '';
-    
-    if (partsLibrary.length === 0) {
-        listDiv.innerHTML = '<p>No parts in library yet. Add parts by entering part numbers in line items.</p>';
-    } else {
-        partsLibrary.forEach(part => {
-            const item = document.createElement('div');
-            item.className = 'part-library-item';
-            const inventory = part.inventory !== undefined ? part.inventory : 0;
-            item.innerHTML = `
-                <div class="part-library-item-info">
-                    <strong>${part.partNumber}</strong>
-                    <div>${part.description}</div>
-                    <div>$${part.price.toFixed(2)}</div>
-                    <div style="color: ${inventory > 0 ? '#28a745' : '#dc3545'}; font-weight: bold;">
-                        Inventory: ${inventory}
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'inventory-item';
+        itemDiv.innerHTML = `
+            <div class="inventory-item-info">
+                <div class="inventory-item-header">
+                    <strong>${item.name}</strong>
+                    <span class="inventory-model">Model: ${item.model}</span>
                     </div>
+                <div class="inventory-item-details">
+                    <span>${item.description}</span>
+                    <span class="inventory-category">${item.category}</span>
                 </div>
-                <div class="part-library-item-actions">
-                    <button class="btn-use-part" onclick="usePartFromLibrary('${part.partNumber}')">Use</button>
-                    <button class="btn-delete-part" onclick="deletePartFromLibrary('${part.partNumber}')">Delete</button>
+                <div class="inventory-item-pricing">
+                    <span>Base: $${item.price.toFixed(2)}/day</span>
+                    ${item.discount > 0 ? `<span>Discount: ${item.discount}%</span>` : ''}
+                    ${item.multiplier !== 1.0 ? `<span>Multiplier: ${item.multiplier}x</span>` : ''}
+                    <strong>Final: $${finalPrice.toFixed(2)}/day</strong>
                 </div>
-            `;
-            listDiv.appendChild(item);
-        });
-    }
-    
-    modal.style.display = 'block';
-}
-
-function closePartsLibrary() {
-    document.getElementById('partsLibraryModal').style.display = 'none';
-}
-
-function usePartFromLibrary(partNumber) {
-    const part = partsLibrary.find(p => p.partNumber === partNumber);
-    if (part) {
-        // Add a new line item with this part
-        addPartLineItem();
-        const lastItem = document.querySelector('#partsLineItemsContainer .line-item:last-child');
-        lastItem.querySelector('.part-number').value = part.partNumber;
-        lastItem.querySelector('.part-description').value = part.description;
-        lastItem.querySelector('.part-price').value = part.price;
-        calculateLineItemTotal();
-        closePartsLibrary();
-    }
-}
-
-function deletePartFromLibrary(partNumber) {
-    if (confirm(`Delete part "${partNumber}" from library?`)) {
-        removeFromPartsLibrary(partNumber);
-    }
-}
-
-// Inventory Management Functions
-function showInventoryManager() {
-    const modal = document.getElementById('inventoryModal');
-    const listDiv = document.getElementById('inventoryList');
-    const searchTerm = document.getElementById('inventorySearch').value.toLowerCase();
-    
-    listDiv.innerHTML = '';
-    
-    // Filter parts based on search
-    const filteredParts = partsLibrary.filter(part => 
-        !searchTerm || 
-        part.partNumber.toLowerCase().includes(searchTerm) ||
-        part.description.toLowerCase().includes(searchTerm)
-    );
-    
-    if (filteredParts.length === 0) {
-        listDiv.innerHTML = '<p>No parts found. Add parts by entering them in a quote.</p>';
-    } else {
-        filteredParts.forEach(part => {
-            const inventory = part.inventory !== undefined ? part.inventory : 0;
-            const item = document.createElement('div');
-            item.className = 'part-library-item';
-            item.style.marginBottom = '15px';
-            item.innerHTML = `
-                <div class="part-library-item-info" style="flex: 2;">
-                    <strong style="color: #667eea; font-size: 1.1em;">${part.partNumber}</strong>
-                    <div style="color: #666; margin: 5px 0;">${part.description}</div>
-                    <div style="color: #888;">$${part.price.toFixed(2)}</div>
+                <div class="inventory-item-stock">
+                    <span class="stock-badge ${stockClass}">Stock: ${item.stock}</span>
                 </div>
-                <div style="flex: 1; display: flex; align-items: center; gap: 10px;">
-                    <label style="font-weight: bold;">Current Stock:</label>
-                    <input type="number" 
-                           id="inventory-${part.partNumber}" 
-                           value="${inventory}" 
-                           min="0" 
-                           step="1"
-                           style="width: 100px; padding: 8px; border: 2px solid #ddd; border-radius: 6px;"
-                           onchange="updatePartInventory('${part.partNumber}', this.value)">
-                    <span style="color: ${inventory > 0 ? '#28a745' : '#dc3545'}; font-weight: bold; min-width: 80px;">
-                        ${inventory > 0 ? 'In Stock' : 'Out of Stock'}
-                    </span>
+            </div>
+            <div class="inventory-item-actions">
+                <button class="btn-edit" onclick="editInventoryItem('${item.id}')">Edit</button>
+                <button class="btn-delete" onclick="deleteInventoryItem('${item.id}')">Delete</button>
                 </div>
             `;
-            listDiv.appendChild(item);
-        });
+        container.appendChild(itemDiv);
+    });
+}
+
+function calculateFinalPrice(item) {
+    let price = item.price;
+    if (item.discount > 0) {
+        price = price * (1 - item.discount / 100);
+    }
+    if (item.multiplier !== 1.0) {
+        price = price * item.multiplier;
+    }
+    return price;
+}
+
+function showAddInventoryForm() {
+    document.getElementById('inventoryFormTitle').textContent = 'Add New Inventory Item';
+    document.getElementById('inventoryForm').reset();
+    document.getElementById('inventoryForm').dataset.mode = 'add';
+    updateCategoryDropdowns(); // Ensure category dropdown is up to date
+    document.getElementById('inventoryFormModal').style.display = 'block';
+}
+
+function closeInventoryForm() {
+    document.getElementById('inventoryFormModal').style.display = 'none';
+}
+
+function saveInventoryItem() {
+    const form = document.getElementById('inventoryForm');
+    const mode = form.dataset.mode;
+    const formData = {
+        name: document.getElementById('invName').value.trim(),
+        model: document.getElementById('invModel').value.trim(),
+        description: document.getElementById('invDescription').value.trim(),
+        price: parseFloat(document.getElementById('invPrice').value) || 0,
+        discount: parseFloat(document.getElementById('invDiscount').value) || 0,
+        multiplier: parseFloat(document.getElementById('invMultiplier').value) || 1.0,
+        stock: parseInt(document.getElementById('invStock').value) || 0,
+        category: document.getElementById('invCategory').value || 'General'
+    };
+    
+    // Validation
+    if (!formData.name || !formData.model) {
+        alert('Name and Model are required.');
+        return;
     }
     
-    modal.style.display = 'block';
-}
-
-function closeInventory() {
-    document.getElementById('inventoryModal').style.display = 'none';
-}
-
-async function updatePartInventory(partNumber, newQuantity) {
-    const partIndex = partsLibrary.findIndex(p => p.partNumber === partNumber);
-    if (partIndex >= 0) {
-        partsLibrary[partIndex].inventory = parseInt(newQuantity) || 0;
-        await savePartsLibrary();
-        // Refresh the display
-        showInventoryManager();
+    if (mode === 'add') {
+        // Add new item
+        const newItem = {
+            id: 'inv-' + Date.now(),
+            ...formData
+        };
+        inventory.push(newItem);
+        } else {
+        // Edit existing item
+        const itemId = form.dataset.itemId;
+        const index = inventory.findIndex(item => item.id === itemId);
+        if (index >= 0) {
+            inventory[index] = { ...inventory[index], ...formData };
+        }
     }
+    
+    saveInventory();
+    renderInventoryList();
+    closeInventoryForm();
+    
+    // Refresh equipment dropdowns
+    refreshEquipmentDropdowns();
 }
 
-// Deduct inventory when PDF is generated
-async function deductInventoryFromQuote() {
-    const partsLineItems = document.querySelectorAll('#partsLineItemsContainer .line-item');
-    let inventoryUpdated = false;
+function editInventoryItem(itemId) {
+    const item = inventory.find(i => i.id === itemId);
+    if (!item) return;
     
-    partsLineItems.forEach(item => {
-        const partNumber = item.querySelector('.part-number').value;
-        const quantity = parseInt(item.querySelector('.part-quantity').value) || 0;
+    updateCategoryDropdowns(); // Ensure category dropdown is up to date
+    
+    document.getElementById('inventoryFormTitle').textContent = 'Edit Inventory Item';
+    document.getElementById('invName').value = item.name;
+    document.getElementById('invModel').value = item.model;
+    document.getElementById('invDescription').value = item.description;
+    document.getElementById('invPrice').value = item.price;
+    document.getElementById('invDiscount').value = item.discount || 0;
+    document.getElementById('invMultiplier').value = item.multiplier || 1.0;
+    document.getElementById('invStock').value = item.stock;
+    document.getElementById('invCategory').value = item.category || 'General';
+    
+    document.getElementById('inventoryForm').dataset.mode = 'edit';
+    document.getElementById('inventoryForm').dataset.itemId = itemId;
+    document.getElementById('inventoryFormModal').style.display = 'block';
+}
+
+function deleteInventoryItem(itemId) {
+    if (!confirm('Delete this inventory item? This cannot be undone.')) return;
+    
+    inventory = inventory.filter(item => item.id !== itemId);
+    saveInventory();
+    renderInventoryList();
+    refreshEquipmentDropdowns();
+}
+
+function refreshEquipmentDropdowns() {
+    // Refresh all equipment item dropdowns
+    document.querySelectorAll('.equipment-inventory-select').forEach(select => {
+        const currentValue = select.value;
+        select.innerHTML = `
+            <option value="">-- Select from Inventory --</option>
+            ${inventory.map(inv => `<option value="${inv.id}">${inv.name} (${inv.model}) - $${inv.price.toFixed(2)}</option>`).join('')}
+        `;
+        select.value = currentValue;
+    });
+}
+
+// ===== CATEGORY MANAGEMENT =====
+function renderCategoriesList() {
+    const container = document.getElementById('categoriesList');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    inventoryCategories.forEach(category => {
+        const div = document.createElement('div');
+        div.style.padding = '12px 16px';
+        div.style.backgroundColor = '#ffffff';
+        div.style.border = '1px solid #d2d2d7';
+        div.style.borderRadius = '10px';
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        div.style.alignItems = 'center';
+        div.innerHTML = `
+            <span style="font-weight: 500;">${category}</span>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" onclick="editCategory('${category}')" 
+                        style="background: #0071e3; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.875em;">Edit</button>
+                <button type="button" onclick="removeCategory('${category}')" 
+                        style="background: #ff3b30; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.875em;">Remove</button>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+}
+
+function showAddCategoryForm() {
+    const categoryName = prompt('Enter category name:');
+    if (!categoryName || !categoryName.trim()) return;
+    
+    const trimmedName = categoryName.trim();
+    
+    if (inventoryCategories.includes(trimmedName)) {
+        alert('This category already exists.');
+        return;
+    }
+    
+    inventoryCategories.push(trimmedName);
+    saveCategories();
+    renderCategoriesList();
+}
+
+function editCategory(oldName) {
+    const newName = prompt(`Edit category name:\n\nCurrent: ${oldName}`, oldName);
+    if (!newName || !newName.trim() || newName.trim() === oldName) return;
+    
+    const trimmedName = newName.trim();
+    
+    if (inventoryCategories.includes(trimmedName)) {
+        alert('This category name already exists.');
+        return;
+    }
+    
+    // Update category in array
+    const index = inventoryCategories.indexOf(oldName);
+    if (index >= 0) {
+        inventoryCategories[index] = trimmedName;
         
-        if (partNumber && quantity > 0) {
-            const partIndex = partsLibrary.findIndex(p => 
-                p.partNumber.toLowerCase() === partNumber.toLowerCase()
-            );
-            
-            if (partIndex >= 0) {
-                const currentInventory = partsLibrary[partIndex].inventory !== undefined 
-                    ? partsLibrary[partIndex].inventory 
-                    : 0;
+        // Update all inventory items with this category
+        inventory.forEach(item => {
+            if (item.category === oldName) {
+                item.category = trimmedName;
+            }
+        });
+        
+        saveInventory();
+        saveCategories();
+        renderCategoriesList();
+        renderInventoryList();
+    }
+}
+
+function removeCategory(categoryName) {
+    // Check if any items use this category
+    const itemsUsingCategory = inventory.filter(item => item.category === categoryName);
+    
+    if (itemsUsingCategory.length > 0) {
+        if (!confirm(`This category is used by ${itemsUsingCategory.length} item(s).\n\nRemoving it will set those items to "General" category.\n\nContinue?`)) {
+            return;
+        }
+        
+        // Set items to General category
+        itemsUsingCategory.forEach(item => {
+            item.category = 'General';
+        });
+        
+        // Ensure General category exists
+        if (!inventoryCategories.includes('General')) {
+            inventoryCategories.push('General');
+        }
+        
+        saveInventory();
+    }
+    
+    // Remove category
+    inventoryCategories = inventoryCategories.filter(cat => cat !== categoryName);
+    
+    // Ensure at least one category exists
+    if (inventoryCategories.length === 0) {
+        inventoryCategories.push('General');
+    }
+    
+    saveCategories();
+    renderCategoriesList();
+    renderInventoryList();
+}
+
+// ===== INVENTORY EXPORT/IMPORT =====
+function exportInventory() {
+    const data = {
+        inventory: inventory,
+        inventoryCategories: inventoryCategories,
+        savedQuotes: savedQuotes,
+        scopeTemplates: SCOPE_TEMPLATES,
+        notesTemplates: NOTES_TEMPLATES,
+        exclusionsTemplates: EXCLUSIONS_TEMPLATES,
+        appConfig: appConfig,
+        exportDate: new Date().toISOString(),
+        version: '1.0'
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const filename = sharedStoragePath ? 'proposal-data-sync.json' : `proposal-data-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    if (sharedStoragePath) {
+        alert(`Data exported! Save "proposal-data-sync.json" to:\n${sharedStoragePath}\n\nOther users can import from this location.`);
+    } else {
+        alert('Data exported! Save this file to backup or share with others.');
+    }
+}
+
+function importInventory() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
                 
-                // Deduct quantity from inventory (don't go below 0)
-                const newInventory = Math.max(0, currentInventory - quantity);
-                partsLibrary[partIndex].inventory = newInventory;
-                inventoryUpdated = true;
+                // Handle full sync file (from shared storage)
+                if (data.inventory && data.scopeTemplates) {
+                    if (confirm('Import complete data (inventory + templates + categories + quotes)? This will merge with your current data.')) {
+                        inventory = data.inventory;
+                        if (data.inventoryCategories && Array.isArray(data.inventoryCategories)) {
+                            inventoryCategories = data.inventoryCategories;
+                            saveCategories();
+                        }
+                        if (data.savedQuotes && Array.isArray(data.savedQuotes)) {
+                            // Merge quotes (update existing, add new)
+                            data.savedQuotes.forEach(importedQuote => {
+                                const existingIndex = savedQuotes.findIndex(q => q.quoteNumber === importedQuote.quoteNumber);
+                                if (existingIndex >= 0) {
+                                    // Merge revisions
+                                    const existing = savedQuotes[existingIndex];
+                                    importedQuote.revisions.forEach(rev => {
+                                        if (!existing.revisions.find(r => r.savedAt === rev.savedAt)) {
+                                            existing.revisions.push(rev);
+                                        }
+                                    });
+                                    existing.revisions.sort((a, b) => a.revisionNumber - b.revisionNumber);
+                                    existing.lastModified = importedQuote.lastModified || existing.lastModified;
+                                } else {
+                                    savedQuotes.push(importedQuote);
+                                }
+                            });
+                            saveSavedQuotes();
+                        }
+                        SCOPE_TEMPLATES = data.scopeTemplates || SCOPE_TEMPLATES;
+                        NOTES_TEMPLATES = data.notesTemplates || NOTES_TEMPLATES;
+                        EXCLUSIONS_TEMPLATES = data.exclusionsTemplates || EXCLUSIONS_TEMPLATES;
+                        if (data.appConfig) {
+                            appConfig = { ...appConfig, ...data.appConfig };
+                            localStorage.setItem('appConfig', JSON.stringify(appConfig));
+                        }
+                        saveInventory();
+                        saveTemplates();
+                        renderCategoriesList();
+                        renderInventoryList();
+                        updateTemplateDropdowns();
+                        refreshEquipmentDropdowns();
+                        alert('Data imported successfully from shared storage!');
+                    }
+                } else if (data.inventory && Array.isArray(data.inventory)) {
+                    // Handle inventory-only file
+                    if (confirm(`Import ${data.inventory.length} inventory items? This will replace your current inventory.`)) {
+                        inventory = data.inventory;
+                        saveInventory();
+                        renderInventoryList();
+                        refreshEquipmentDropdowns();
+                        alert('Inventory imported successfully!');
+                    }
+                } else {
+                    alert('Invalid data file format.');
+                }
+            } catch (error) {
+                console.error('Import error:', error);
+                alert('Error importing data. Please check the file format.');
+            }
+        }
+    };
+    input.click();
+}
+
+// ===== TEMPLATE MANAGEMENT =====
+function showTemplateManager() {
+    showPage('templates');
+}
+
+function closeTemplateManager() {
+    // Not needed with new navigation, but keep for compatibility
+}
+
+function renderTemplateLists() {
+    // Render Scope Templates
+    const scopeList = document.getElementById('scopeTemplatesList');
+    scopeList.innerHTML = '';
+    Object.keys(SCOPE_TEMPLATES).forEach(key => {
+        if (key === 'custom') return;
+        const div = document.createElement('div');
+        div.style.marginBottom = '20px';
+        div.style.padding = '16px';
+        div.style.backgroundColor = '#ffffff';
+        div.style.border = '1px solid #d2d2d7';
+        div.style.borderRadius = '10px';
+        div.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="display: block; font-weight: 600; margin: 0;">${key.charAt(0).toUpperCase() + key.slice(1)}</label>
+                <button type="button" onclick="removeTemplate('scope', '${key}')" 
+                        style="background: #ff3b30; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.875em;"
+                        onmouseover="this.style.background='#ff2d20'" 
+                        onmouseout="this.style.background='#ff3b30'">Remove</button>
+            </div>
+            <textarea id="scope-${key}" rows="3" style="width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 0.9375em; font-family: inherit; resize: vertical;">${SCOPE_TEMPLATES[key]}</textarea>
+        `;
+        scopeList.appendChild(div);
+    });
+    // Add Template button for Scope
+    const addScopeBtn = document.createElement('button');
+    addScopeBtn.type = 'button';
+    addScopeBtn.className = 'btn-secondary';
+    addScopeBtn.textContent = '+ Add Scope Template';
+    addScopeBtn.onclick = () => addTemplate('scope');
+    addScopeBtn.style.marginTop = '10px';
+    scopeList.appendChild(addScopeBtn);
+    
+    // Render Notes Templates
+    const notesList = document.getElementById('notesTemplatesList');
+    notesList.innerHTML = '';
+    Object.keys(NOTES_TEMPLATES).forEach(key => {
+        if (key === 'custom') return;
+        const div = document.createElement('div');
+        div.style.marginBottom = '20px';
+        div.style.padding = '16px';
+        div.style.backgroundColor = '#ffffff';
+        div.style.border = '1px solid #d2d2d7';
+        div.style.borderRadius = '10px';
+        div.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="display: block; font-weight: 600; margin: 0;">${key.charAt(0).toUpperCase() + key.slice(1)}</label>
+                <button type="button" onclick="removeTemplate('notes', '${key}')" 
+                        style="background: #ff3b30; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.875em;"
+                        onmouseover="this.style.background='#ff2d20'" 
+                        onmouseout="this.style.background='#ff3b30'">Remove</button>
+            </div>
+            <textarea id="notes-${key}" rows="3" style="width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 0.9375em; font-family: inherit; resize: vertical;">${NOTES_TEMPLATES[key]}</textarea>
+        `;
+        notesList.appendChild(div);
+    });
+    // Add Template button for Notes
+    const addNotesBtn = document.createElement('button');
+    addNotesBtn.type = 'button';
+    addNotesBtn.className = 'btn-secondary';
+    addNotesBtn.textContent = '+ Add Notes Template';
+    addNotesBtn.onclick = () => addTemplate('notes');
+    addNotesBtn.style.marginTop = '10px';
+    notesList.appendChild(addNotesBtn);
+    
+    // Render Exclusions Templates
+    const exclusionsList = document.getElementById('exclusionsTemplatesList');
+    exclusionsList.innerHTML = '';
+    Object.keys(EXCLUSIONS_TEMPLATES).forEach(key => {
+        if (key === 'custom') return;
+        const div = document.createElement('div');
+        div.style.marginBottom = '20px';
+        div.style.padding = '16px';
+        div.style.backgroundColor = '#ffffff';
+        div.style.border = '1px solid #d2d2d7';
+        div.style.borderRadius = '10px';
+        div.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="display: block; font-weight: 600; margin: 0;">${key.charAt(0).toUpperCase() + key.slice(1)}</label>
+                <button type="button" onclick="removeTemplate('exclusions', '${key}')" 
+                        style="background: #ff3b30; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.875em;"
+                        onmouseover="this.style.background='#ff2d20'" 
+                        onmouseout="this.style.background='#ff3b30'">Remove</button>
+                </div>
+            <textarea id="exclusions-${key}" rows="3" style="width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 0.9375em; font-family: inherit; resize: vertical;">${EXCLUSIONS_TEMPLATES[key]}</textarea>
+        `;
+        exclusionsList.appendChild(div);
+    });
+    // Add Template button for Exclusions
+    const addExclusionsBtn = document.createElement('button');
+    addExclusionsBtn.type = 'button';
+    addExclusionsBtn.className = 'btn-secondary';
+    addExclusionsBtn.textContent = '+ Add Exclusions Template';
+    addExclusionsBtn.onclick = () => addTemplate('exclusions');
+    addExclusionsBtn.style.marginTop = '10px';
+    exclusionsList.appendChild(addExclusionsBtn);
+}
+
+function saveAllTemplates() {
+    // Save Scope Templates
+    Object.keys(SCOPE_TEMPLATES).forEach(key => {
+        if (key !== 'custom') {
+            const textarea = document.getElementById(`scope-${key}`);
+            if (textarea) {
+                SCOPE_TEMPLATES[key] = textarea.value.trim();
             }
         }
     });
     
-    if (inventoryUpdated) {
-        await savePartsLibrary();
+    // Save Notes Templates
+    Object.keys(NOTES_TEMPLATES).forEach(key => {
+        if (key !== 'custom') {
+            const textarea = document.getElementById(`notes-${key}`);
+            if (textarea) {
+                NOTES_TEMPLATES[key] = textarea.value.trim();
+            }
+        }
+    });
+    
+    // Save Exclusions Templates
+    Object.keys(EXCLUSIONS_TEMPLATES).forEach(key => {
+        if (key !== 'custom') {
+            const textarea = document.getElementById(`exclusions-${key}`);
+            if (textarea) {
+                EXCLUSIONS_TEMPLATES[key] = textarea.value.trim();
+            }
+        }
+    });
+    
+    saveTemplates();
+    updateTemplateDropdowns();
+    alert('Templates saved successfully!');
+}
+
+function addTemplate(type) {
+    const templateName = prompt(`Enter a name for the new ${type} template:`);
+    if (!templateName || !templateName.trim()) return;
+    
+    // Sanitize key: lowercase, replace spaces with underscores, remove special characters
+    let key = templateName.trim().toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_]/g, '');
+    
+    // Ensure key is not empty and doesn't start with a number
+    if (!key || /^\d/.test(key)) {
+        alert('Template name must start with a letter. Please try again.');
+        return;
+    }
+    
+    // Check if template already exists
+    let templateExists = false;
+    if (type === 'scope' && SCOPE_TEMPLATES[key]) templateExists = true;
+    if (type === 'notes' && NOTES_TEMPLATES[key]) templateExists = true;
+    if (type === 'exclusions' && EXCLUSIONS_TEMPLATES[key]) templateExists = true;
+    
+    if (templateExists) {
+        alert('A template with this name already exists. Please choose a different name.');
+        return;
+    }
+    
+    // Add new template
+    if (type === 'scope') {
+        SCOPE_TEMPLATES[key] = '';
+    } else if (type === 'notes') {
+        NOTES_TEMPLATES[key] = '';
+    } else if (type === 'exclusions') {
+        EXCLUSIONS_TEMPLATES[key] = '';
+    }
+    
+    saveTemplates();
+    renderTemplateLists();
+    updateTemplateDropdowns();
+}
+
+function removeTemplate(type, key) {
+    if (key === 'custom') {
+        alert('Cannot remove the "custom" template.');
+        return;
+    }
+    
+    // Count existing templates (excluding 'custom')
+    let templateCount = 0;
+    if (type === 'scope') {
+        templateCount = Object.keys(SCOPE_TEMPLATES).filter(k => k !== 'custom').length;
+        if (templateCount <= 1) {
+            alert('Cannot remove the last template. You must have at least one template.');
+            return;
+        }
+        if (confirm(`Remove the "${key}" template? This cannot be undone.`)) {
+            delete SCOPE_TEMPLATES[key];
+        }
+    } else if (type === 'notes') {
+        templateCount = Object.keys(NOTES_TEMPLATES).filter(k => k !== 'custom').length;
+        if (templateCount <= 1) {
+            alert('Cannot remove the last template. You must have at least one template.');
+            return;
+        }
+        if (confirm(`Remove the "${key}" template? This cannot be undone.`)) {
+            delete NOTES_TEMPLATES[key];
+        }
+    } else if (type === 'exclusions') {
+        templateCount = Object.keys(EXCLUSIONS_TEMPLATES).filter(k => k !== 'custom').length;
+        if (templateCount <= 1) {
+            alert('Cannot remove the last template. You must have at least one template.');
+            return;
+        }
+        if (confirm(`Remove the "${key}" template? This cannot be undone.`)) {
+            delete EXCLUSIONS_TEMPLATES[key];
+        }
+    }
+    
+    saveTemplates();
+    renderTemplateLists();
+    updateTemplateDropdowns();
+}
+
+function resetTemplatesToDefaults() {
+    if (confirm('Reset all templates to default values? This cannot be undone.')) {
+        SCOPE_TEMPLATES = JSON.parse(JSON.stringify(DEFAULT_SCOPE_TEMPLATES));
+        NOTES_TEMPLATES = JSON.parse(JSON.stringify(DEFAULT_NOTES_TEMPLATES));
+        EXCLUSIONS_TEMPLATES = JSON.parse(JSON.stringify(DEFAULT_EXCLUSIONS_TEMPLATES));
+        saveTemplates();
+        renderTemplateLists();
+        updateTemplateDropdowns();
+        alert('Templates reset to defaults!');
     }
 }
 
+// ===== SHARED STORAGE SYNC =====
+function syncToSharedStorage() {
+    if (!sharedStoragePath) return;
+    
+    try {
+        const data = {
+            inventory: inventory,
+            inventoryCategories: inventoryCategories,
+            savedQuotes: savedQuotes,
+            scopeTemplates: SCOPE_TEMPLATES,
+            notesTemplates: NOTES_TEMPLATES,
+            exclusionsTemplates: EXCLUSIONS_TEMPLATES,
+            appConfig: appConfig,
+            lastSynced: new Date().toISOString(),
+            version: '1.0'
+        };
+        
+        // For browser-based app, we'll use export/import pattern
+        // Save to localStorage with a flag that it should be exported
+        localStorage.setItem('pendingSync', JSON.stringify(data));
+        
+        // Trigger download for manual sync (user can save to shared location)
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'proposal-data-sync.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        console.log('Data ready for sync. Save the downloaded file to:', sharedStoragePath);
+    } catch (error) {
+        console.error('Sync error:', error);
+        alert('Error syncing to shared storage. Check console for details.');
+    }
+}
 
+function syncFromSharedStorage() {
+    if (!sharedStoragePath) return;
+    
+    // For browser-based app, user needs to import from shared location
+    // This function will be called when user clicks "Import" from shared folder
+    alert('To sync from shared storage:\n1. Open the shared folder\n2. Find "proposal-data-sync.json"\n3. Use "Import" function in Inventory or Settings');
+}
+
+function testStorageConnection() {
+    const path = document.getElementById('sharedStoragePath').value.trim();
+    if (!path) {
+        alert('Please enter a storage path first.');
+        return;
+    }
+    
+    // Since we're browser-based, we can't directly access file system
+    // But we can guide the user
+    alert(`Storage Path: ${path}\n\nFor multi-user sync:\n1. All users should point to the same folder\n2. Use Export/Import to sync data\n3. Save exported files to this folder\n4. Other users can import from this folder\n\nNote: Browser security prevents direct file system access. Use Export/Import for manual sync.`);
+}
+
+// Close modals when clicking outside
+window.onclick = function(event) {
+    const inventoryFormModal = document.getElementById('inventoryFormModal');
+    if (event.target === inventoryFormModal) {
+        closeInventoryForm();
+    }
+}

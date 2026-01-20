@@ -1,123 +1,225 @@
-# Professional Quoting Tool
+# Construction Quote Generator
 
-A business-formal web-based quoting tool that allows you to create professional PDF quotes with parts management, labor calculations, and automatic markup calculations.
+A fast, streamlined web-based tool for generating professional construction quotes focused on **labor and equipment**. Minimal inputs, maximum efficiency.
 
-## Features
+## 🚀 Quick Start
 
-- **Company Information Management**: Store and display your company logo, name, and contact information
-- **Customer Information**: Enter detailed customer/quote recipient information
-- **Parts Library**: Automatically saves parts (part number, description, price) when first entered, allowing reuse in future quotes
-- **Line Items**: Add multiple line items with part numbers, descriptions, unit prices, and quantities
-- **Labor & Markups**: Configure multiple labor categories with:
-  - Parts markup percentage
-  - Hourly labor rates
-  - Estimated labor hours
-- **Automatic Calculations**: 
-  - Parts subtotal
-  - Parts markup
-  - Labor totals
-  - Grand total
-- **Professional PDF Generation**: Generate clean, professional PDF quotes
-- **Draft Saving**: Save and load draft quotes
-- **Data Persistence**: Parts library and drafts are saved in browser localStorage
+1. **Open `index.html`** in your browser
+2. **First Time:** Click "⚙️ Company Settings" and fill in your company info
+3. **Create Quote:** Fill in customer name, select templates, add labor/equipment items
+4. **Generate PDF:** Click "Generate PDF Quote" - done!
 
-## How to Use
+## ✨ Key Features
 
-### Getting Started
+- **Minimal Input Required:** Smart defaults and templates reduce typing
+- **Construction-Focused:** Built specifically for labor and equipment quotes
+- **Quick Templates:** Pre-filled options for common tasks and equipment
+- **Auto-Calculations:** Totals update automatically as you type
+- **Professional PDFs:** Clean, print-ready quotes ready to send
+- **One-Time Setup:** Company info saved, reuse for all quotes
 
-1. Open `index.html` in your Google Chrome browser (or any modern web browser)
-2. The tool will load with default fields ready for input
+## 📋 What You Need to Enter
 
-### Entering Company Information
+**Required:**
+- Customer Name
+- Scope Summary (job description)
+- At least one Labor OR Equipment item
 
-1. Fill in your company details:
-   - Company logo URL (optional - can be left blank)
-   - Company name (required)
-   - Address, phone, email, website (optional)
+**Optional:**
+- Job Name
+- Customer Address
+- Notes & Assumptions
+- Exclusions
 
-### Entering Customer Information
+**Auto-Generated:**
+- Quote Number
+- Quote Date (today)
+- Valid Until (30 days from quote date)
 
-1. Fill in the "Quote To" section:
-   - Customer name (required)
-   - Customer address, phone, email (optional)
-   - Quote number (auto-generated if left blank)
-   - Quote date (defaults to today)
+## 🎯 How It Works
 
-### Adding Parts/Line Items
+### 1. Company Settings (One-Time Setup)
 
-1. Click "+ Add Line Item" to add more line items
-2. Enter part information:
-   - **Part Number**: Type to search existing parts in library, or enter new part number
-   - **Description**: Auto-filled if part exists in library, or enter manually
-   - **Unit Price**: Enter the price per unit
-   - **Quantity**: Enter quantity (defaults to 1)
-3. When you enter a part number for the first time with description and price, it's automatically saved to the parts library
-4. Click "Remove" to delete a line item
+Click "⚙️ Company Settings" and enter:
+- Company Name (required)
+- Contact Info (phone, email, address)
+- Logo (optional - upload image file)
+- Default Rates (labor $/hr, equipment $/day)
+- Tax Rate (if applicable)
 
-### Using the Parts Library
+**Settings are saved automatically** and used for all future quotes.
 
-1. Click "View Parts Library" to see all saved parts
-2. Click "Use" to add a part from the library to your quote
-3. Click "Delete" to remove a part from the library
-4. When typing a part number, matching parts from the library will appear in a dropdown
+### 2. Create a Quote
 
-### Adding Labor & Markups
+**Customer Info:**
+- Enter customer name (required)
+- Optional: Job name, address
 
-1. Each labor category can have:
-   - **Category Name**: e.g., "Electrical", "Plumbing", etc.
-   - **Parts Markup (%)**: Percentage markup applied to parts subtotal
-   - **Hourly Labor Rate**: Rate per hour for labor
-   - **Estimated Hours**: Number of hours estimated
-2. Click "+ Add Labor Category" to add more categories
-3. Labor totals are calculated automatically
-4. Parts markup is calculated as a percentage of the parts subtotal
+**Scope Summary:**
+- Select a template (Electrical, Plumbing, Framing, etc.) OR
+- Type custom description
 
-### Adding Notes
+**Labor Items:**
+- Click "+ Add Labor Item"
+- Select template from dropdown (optional)
+- Enter hours (use quick-select: 1, 2, 4, 8, 16, 40 hrs)
+- Rate auto-fills from settings (editable)
+- Total calculates automatically
 
-1. Enter any additional notes, terms, or scope description in the "Additional Notes" section
-2. These will appear at the bottom of the generated PDF
+**Equipment Items:**
+- Click "+ Add Equipment Item"
+- Select template from dropdown (optional)
+- Enter days (use quick-select: 0.5, 1, 2, 5, 10, 20 days)
+- Rate auto-fills from settings (editable)
+- Total calculates automatically
 
-### Generating PDF
+**Notes & Exclusions:**
+- Select templates OR type custom text
+- Common assumptions and exclusions pre-written
 
-1. Fill in all required information
-2. Review the "Quote Summary" section to verify calculations
-3. Click "Generate PDF Quote"
-4. The PDF will be automatically downloaded with filename format: `Quote_[QuoteNumber]_[Date].pdf`
+### 3. Generate PDF
 
-### Saving and Loading Drafts
+Click "Generate PDF Quote" - the PDF downloads automatically with:
+- Professional formatting
+- All calculations
+- Company branding
+- Ready to send to customer
 
-1. Click "Save Draft" to save your current quote (saved to browser localStorage)
-2. Click "Load Draft" to restore a previously saved draft
-3. Click "Clear Form" to reset all fields
+## 📊 Quote Structure
 
-## Technical Details
+The generated PDF includes (in order):
 
-- **Storage**: All data is stored in browser localStorage
-- **PDF Generation**: Uses jsPDF library (loaded from CDN)
-- **Browser Compatibility**: Works in all modern browsers (Chrome, Firefox, Edge, Safari)
-- **No Backend Required**: Runs entirely in the browser, no server needed
+1. **Header:** Company logo, name, contact info
+2. **Quote Info:** Quote #, date, valid until
+3. **Customer Info:** Name, job, address
+4. **Scope Summary:** Job description
+5. **Labor Section:** Table with hours, rates, totals
+6. **Equipment Section:** Table with days, rates, totals
+7. **Summary:** Subtotals, tax (if any), grand total
+8. **Notes & Assumptions:** Additional information
+9. **Exclusions:** What's not included
 
-## File Structure
+## 🎨 Templates Included
+
+**Scope Templates:**
+- Electrical Installation
+- Plumbing Work
+- Framing & Structure
+- Drywall Installation
+- Roofing Work
+- Concrete Work
+
+**Labor Templates:**
+- Electrical Work
+- Plumbing Work
+- Framing
+- Drywall
+- Roofing
+- Concrete
+- General Labor
+
+**Equipment Templates:**
+- Excavator
+- Crane
+- Loader
+- Generator
+- Scaffolding
+- Compactor
+- Truck/Vehicle
+
+**Notes Templates:**
+- Standard Assumptions
+- Site Conditions
+- Materials Included
+
+**Exclusions Templates:**
+- Standard Exclusions
+- Permits & Inspections
+- Materials Not Included
+
+## 💡 Tips for Fast Quotes
+
+1. **Use Templates:** Select from dropdowns instead of typing
+2. **Quick-Select Hours/Days:** Use the quick-select dropdowns
+3. **Set Default Rates:** Configure once in settings, applies to all items
+4. **Save Time:** Only fill required fields for fastest quotes
+5. **Reuse Settings:** Company info saved, no need to re-enter
+
+## 🔧 Technical Details
+
+- **Storage:** Browser localStorage (company settings persist)
+- **PDF Generation:** jsPDF library (loaded from CDN)
+- **Browser:** Works in all modern browsers (Chrome, Firefox, Edge, Safari)
+- **No Backend:** Runs entirely in browser, no server needed
+- **No Installation:** Just open the HTML file
+
+## 📁 File Structure
 
 ```
-Quoting Tool/
-├── index.html      # Main HTML structure
-├── styles.css      # Professional styling
-├── script.js       # All functionality and logic
+Construction Quote Generator/
+├── index.html      # Main application (single page)
+├── script.js       # All functionality
+├── styles.css      # Styling
 └── README.md       # This file
 ```
 
-## Notes
+## 🆚 What Changed from Previous Version
 
-- The parts library persists across browser sessions
-- Drafts are saved locally in your browser
-- Quote numbers are auto-generated if not provided (format: QT-YYYYMMDD-XXX)
-- All calculations update automatically as you type
-- The PDF is optimized for printing and professional presentation
+**Removed:**
+- Complex parts library system
+- Inventory management
+- Cloud storage file picker
+- Multiple labor categories with markups
+- Parts markup calculations
+- Draft saving complexity
+- Separate configuration page
 
-## Browser Requirements
+**Simplified:**
+- Single-page interface
+- Labor + Equipment focus only
+- Template-based inputs
+- Smart defaults everywhere
+- Streamlined PDF output
 
-- Modern web browser (Chrome, Firefox, Edge, Safari)
-- JavaScript enabled
-- Internet connection (for loading jsPDF library from CDN)
+**Added:**
+- Quick-select dropdowns for hours/days
+- Construction-specific templates
+- Scope summary section
+- Exclusions section
+- Auto-valid until date
+- Better validation
 
+## 🐛 Troubleshooting
+
+**"Settings not saving"**
+- Make sure browser allows localStorage
+- Check browser console for errors
+
+**"PDF not generating"**
+- Check that all required fields are filled
+- Verify at least one labor or equipment item exists
+- Check browser console for errors
+
+**"Templates not working"**
+- Make sure JavaScript is enabled
+- Try refreshing the page
+
+## 📝 Notes
+
+- Quote numbers auto-generate: `QT-YYYYMMDD-XXX`
+- Valid until date is automatically 30 days from quote date
+- All calculations update in real-time
+- PDF is optimized for printing
+- Settings persist across browser sessions
+
+## 🎯 Best Practices
+
+1. **Set up company info first** - saves time on every quote
+2. **Use templates** - faster than typing everything
+3. **Set default rates** - applies to all new items
+4. **Review before PDF** - check calculations in summary section
+5. **Keep it simple** - only add what's needed
+
+---
+
+**Ready to create professional construction quotes in minutes!** 🚀

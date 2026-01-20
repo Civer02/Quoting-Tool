@@ -3,170 +3,396 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Professional Quoting Tool</title>
+    <title>Proposal Generator</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Professional Quoting Tool</h1>
+            <h1>Proposal Generator</h1>
+            <p class="subtitle">GO SELL</p>
         </header>
 
-        <div class="quote-form">
-            <!-- Company Information Section -->
-            <section class="form-section">
-                <h2>Company Information</h2>
-                <div class="form-group">
-                    <label>Company Logo</label>
-                    <div id="logoDisplay" style="margin-bottom: 10px; max-width: 200px; max-height: 100px;">
-                        <img id="logoImage" src="" alt="Company Logo" style="max-width: 100%; max-height: 100%; display: none;">
+        <!-- Start Page / Main Menu -->
+        <div id="startPage" class="page">
+            <div class="start-menu">
+                <div class="menu-grid">
+                    <div class="menu-card" onclick="showPage('proposal')">
+                        <div class="menu-icon">📄</div>
+                        <h2>Generate Proposal</h2>
+                        <p>Create a new professional proposal</p>
                     </div>
-                    <small>Logo is set in configuration. <a href="config.html">Change configuration</a></small>
-                </div>
-                <div class="form-group">
-                    <label for="companyName">Company Name *</label>
-                    <input type="text" id="companyName" required>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="companyAddress">Address</label>
-                        <textarea id="companyAddress" rows="2"></textarea>
+                    <div class="menu-card" onclick="showPage('inventory')">
+                        <div class="menu-icon">📦</div>
+                        <h2>Manage Inventory</h2>
+                        <p>View, add, and edit equipment items</p>
                     </div>
-                    <div class="form-group">
-                        <label for="companyPhone">Phone</label>
-                        <input type="tel" id="companyPhone">
+                    <div class="menu-card" onclick="showPage('templates')">
+                        <div class="menu-icon">📝</div>
+                        <h2>Edit Templates</h2>
+                        <p>Customize scope, notes, and exclusions</p>
                     </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="companyEmail">Email</label>
-                        <input type="email" id="companyEmail">
+                    <div class="menu-card" onclick="showPage('quotes')">
+                        <div class="menu-icon">📋</div>
+                        <h2>View Quotes</h2>
+                        <p>View, edit, and manage saved quotes</p>
                     </div>
-                    <div class="form-group">
-                        <label for="companyWebsite">Website</label>
-                        <input type="url" id="companyWebsite">
+                    <div class="menu-card" onclick="showPage('settings')">
+                        <div class="menu-icon">⚙️</div>
+                        <h2>Settings</h2>
+                        <p>Company info, storage, and preferences</p>
                     </div>
                 </div>
-            </section>
+            </div>
+        </div>
 
-            <!-- Customer Information Section -->
-            <section class="form-section">
-                <h2>Quote To (Customer Information)</h2>
-                <div class="form-group">
-                    <label for="jobName">Job Name / Project Name</label>
-                    <input type="text" id="jobName" placeholder="e.g., Kitchen Remodel, Electrical Service">
-                </div>
-                <div class="form-group">
-                    <label for="customerName">Customer Name *</label>
-                    <input type="text" id="customerName" required>
-                </div>
-                <div class="form-group">
-                    <label for="customerAddress">Address</label>
-                    <textarea id="customerAddress" rows="2"></textarea>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="customerPhone">Phone</label>
-                        <input type="tel" id="customerPhone">
+        <!-- Proposal Generation Page -->
+        <div id="proposalPage" class="page" style="display: none;">
+            <div class="page-header">
+                <button class="btn-back" onclick="showPage('start')">← Back to Menu</button>
+                <h2>Generate Proposal</h2>
+            </div>
+            <div class="quote-form">
+                <!-- Customer & Job Info -->
+                <section class="form-section">
+                    <h2>Customer & Job Information</h2>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Customer Name *</label>
+                            <input type="text" id="customerName" required placeholder="John Smith">
+                        </div>
+                        <div class="form-group">
+                            <label>Job Name</label>
+                            <input type="text" id="jobName" placeholder="Kitchen Remodel">
+                        </div>
                     </div>
                     <div class="form-group">
-                        <label for="customerEmail">Email</label>
-                        <input type="email" id="customerEmail">
+                        <label>Jobsite Address</label>
+                        <textarea id="jobsiteAddress" rows="2" placeholder="456 Construction Site, City, State ZIP"></textarea>
                     </div>
-                </div>
-                <div class="form-group">
-                    <label for="quoteNumber">Quote Number</label>
-                    <input type="text" id="quoteNumber" placeholder="Auto-generated if left blank">
-                </div>
-                <div class="form-group">
-                    <label for="quoteDate">Quote Date</label>
-                    <input type="date" id="quoteDate">
-                </div>
-            </section>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Quote Number</label>
+                            <input type="text" id="quoteNumber" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>Quote Date</label>
+                            <input type="date" id="quoteDate">
+                        </div>
+                        <div class="form-group">
+                            <label>Valid Until</label>
+                            <input type="date" id="validUntil" readonly>
+                        </div>
+                    </div>
+                </section>
 
-            <!-- Parts Section -->
-            <section class="form-section">
-                <h2>Parts</h2>
-                <div class="parts-library-section">
-                    <button type="button" class="btn-secondary" id="showPartsLibrary">View Parts Library</button>
-                    <button type="button" class="btn-secondary" id="showInventoryManager" style="margin-left: 10px;">Manage Inventory</button>
-                </div>
-                <div class="form-group">
-                    <label>Parts Markup (%)</label>
-                    <input type="number" id="partsMarkup" step="0.1" min="0" value="0" placeholder="0">
-                </div>
-                <div id="partsLineItemsContainer">
-                    <!-- Line items will be added here dynamically -->
-                </div>
-                <button type="button" class="btn-secondary" id="addPartLineItem">+ Add Part</button>
-            </section>
-
-            <!-- Labor Hours Section -->
-            <section class="form-section">
-                <h2>Labor Hours</h2>
-                <div class="form-row">
+                <!-- Scope Summary -->
+                <section class="form-section">
+                    <h2>Scope Summary</h2>
                     <div class="form-group">
-                        <label>Hourly Labor Rate ($/hr)</label>
-                        <input type="number" id="laborRate" step="0.01" min="0" value="0" placeholder="0.00">
+                        <label>Job Description *</label>
+                        <select id="scopeTemplate" onchange="applyScopeTemplate()" class="template-select">
+                            <option value="">-- Select Template or Type Custom --</option>
+                        </select>
+                        <textarea id="scopeSummary" rows="3" required placeholder="Describe the work to be performed..."></textarea>
+                    </div>
+                </section>
+
+                <!-- Labor Section -->
+                <section class="form-section">
+                    <h2>Labor</h2>
+                    <div id="laborItemsContainer"></div>
+                    <button type="button" class="btn-secondary" onclick="addLaborItem()">+ Add Labor Item</button>
+                </section>
+
+                <!-- Equipment Section -->
+                <section class="form-section">
+                    <h2>Equipment</h2>
+                    <div id="equipmentItemsContainer"></div>
+                    <button type="button" class="btn-secondary" onclick="addEquipmentItem()">+ Add Equipment Item</button>
+                </section>
+
+                <!-- Notes & Exclusions -->
+                <section class="form-section">
+                    <h2>Notes & Assumptions</h2>
+                    <div class="form-group">
+                        <select id="notesTemplate" onchange="applyNotesTemplate()" class="template-select">
+                            <option value="">-- Select Template or Type Custom --</option>
+                        </select>
+                        <textarea id="notes" rows="4" placeholder="Assumptions, notes, or special conditions..."></textarea>
                     </div>
                     <div class="form-group">
-                        <label>Number of Hours</label>
-                        <input type="number" id="laborHours" step="0.25" min="0" value="0" placeholder="0">
+                        <label>Exclusions (Optional)</label>
+                        <select id="exclusionsTemplate" onchange="applyExclusionsTemplate()" class="template-select">
+                            <option value="">-- Select Template or Type Custom --</option>
+                        </select>
+                        <textarea id="exclusions" rows="3" placeholder="What is NOT included in this proposal..."></textarea>
+                    </div>
+                </section>
+
+                <!-- Summary -->
+                <section class="form-section summary-section">
+                    <h2>Proposal Summary</h2>
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <span class="summary-label">Labor Subtotal:</span>
+                            <span class="summary-value" id="laborSubtotal">$0.00</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Equipment Subtotal:</span>
+                            <span class="summary-value" id="equipmentSubtotal">$0.00</span>
+                        </div>
+                        <div class="summary-item" id="taxRow" style="display: none;">
+                            <span class="summary-label">Tax:</span>
+                            <span class="summary-value" id="taxAmount">$0.00</span>
+                        </div>
+                        <div class="summary-item grand-total">
+                            <span class="summary-label">Grand Total:</span>
+                            <span class="summary-value" id="grandTotal">$0.00</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Actions -->
+                <div class="action-buttons">
+                    <button type="button" class="btn-primary" onclick="generatePDF()">Generate PDF Proposal</button>
+                    <button type="button" class="btn-secondary" onclick="saveCurrentQuote()">💾 Save Quote</button>
+                    <button type="button" class="btn-secondary" onclick="clearForm()">New Proposal</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inventory Management Page -->
+        <div id="inventoryPage" class="page" style="display: none;">
+            <div class="page-header">
+                <button class="btn-back" onclick="showPage('start')">← Back to Menu</button>
+                <h2>Inventory Management</h2>
+            </div>
+            <div class="page-content">
+                <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" class="btn-primary" onclick="showAddInventoryForm()">+ Add New Item</button>
+                    <button type="button" class="btn-secondary" onclick="exportInventory()">📥 Export Inventory</button>
+                    <button type="button" class="btn-secondary" onclick="importInventory()">📤 Import Inventory</button>
+                </div>
+                
+                <!-- Category Management Section -->
+                <section class="form-section" style="margin-bottom: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="margin: 0;">Manage Categories</h3>
+                        <button type="button" class="btn-secondary" onclick="showAddCategoryForm()">+ Add Category</button>
+                    </div>
+                    <div id="categoriesList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;"></div>
+                </section>
+                
+                <div id="inventoryList"></div>
+            </div>
+        </div>
+
+        <!-- Templates Page -->
+        <div id="templatesPage" class="page" style="display: none;">
+            <div class="page-header">
+                <button class="btn-back" onclick="showPage('start')">← Back to Menu</button>
+                <h2>Template Management</h2>
+            </div>
+            <div class="page-content">
+                <div style="margin-bottom: 20px;">
+                    <button type="button" class="btn-secondary" onclick="resetTemplatesToDefaults()">Reset to Defaults</button>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+                    <div>
+                        <h3>Scope Summary Templates</h3>
+                        <div id="scopeTemplatesList"></div>
+                    </div>
+                    <div>
+                        <h3>Notes & Assumptions Templates</h3>
+                        <div id="notesTemplatesList"></div>
+                    </div>
+                    <div>
+                        <h3>Exclusions Templates</h3>
+                        <div id="exclusionsTemplatesList"></div>
+                    </div>
+                </div>
+                <div class="action-buttons" style="margin-top: 24px;">
+                    <button type="button" class="btn-primary" onclick="saveAllTemplates()">Save All Templates</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quotes Management Page -->
+        <div id="quotesPage" class="page" style="display: none;">
+            <div class="page-header">
+                <button class="btn-back" onclick="showPage('start')">← Back to Menu</button>
+                <h2>Quote History & Revisions</h2>
+            </div>
+            <div class="page-content">
+                <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" class="btn-secondary" onclick="exportAllQuotes()">📥 Export All Quotes</button>
+                    <button type="button" class="btn-secondary" onclick="importQuotes()">📤 Import Quotes</button>
+                </div>
+                <div id="quotesList"></div>
+            </div>
+        </div>
+
+        <!-- Settings Page -->
+        <div id="settingsPage" class="page" style="display: none;">
+            <div class="page-header">
+                <button class="btn-back" onclick="showPage('start')">← Back to Menu</button>
+                <h2>Settings</h2>
+            </div>
+            <div class="page-content">
+                <!-- Company Information -->
+                <section class="form-section">
+                    <h2>Company Information</h2>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Company Name *</label>
+                            <input type="text" id="configCompanyName" placeholder="Your Company Name">
+                        </div>
+                        <div class="form-group">
+                            <label>Logo (Optional)</label>
+                            <input type="file" id="logoUpload" accept="image/*" onchange="handleLogoUpload(event)">
+                            <div id="logoPreview" style="margin-top: 10px; display: none;">
+                                <img id="logoPreviewImg" style="max-height: 60px;">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Phone</label>
+                            <input type="tel" id="configCompanyPhone" placeholder="(555) 123-4567">
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="configCompanyEmail" placeholder="info@company.com">
+                        </div>
                     </div>
                     <div class="form-group">
-                        <label>Labor Total</label>
-                        <input type="text" id="laborTotal" readonly value="$0.00" style="font-weight: bold; font-size: 1.1em;">
+                        <label>Address</label>
+                        <textarea id="configCompanyAddress" rows="2" placeholder="123 Main St, City, State ZIP"></textarea>
                     </div>
-                </div>
-            </section>
-
-            <!-- Notes Section -->
-            <section class="form-section">
-                <h2>Additional Notes / Scope Description</h2>
-                <div class="form-group">
-                    <textarea id="quoteNotes" rows="4" placeholder="Enter any additional notes, terms, or scope description..."></textarea>
-                </div>
-            </section>
-
-            <!-- Terms and Conditions Section -->
-            <section class="form-section">
-                <h2>Terms and Conditions</h2>
-                <div class="form-group">
-                    <textarea id="termsAndConditions" rows="6" placeholder="Enter terms and conditions (e.g., payment terms, warranty, delivery terms, etc.)..."></textarea>
-                </div>
-            </section>
-
-            <!-- Summary Section -->
-            <section class="form-section summary-section">
-                <h2>Quote Summary</h2>
-                <div class="summary-grid">
-                    <div class="summary-item grand-total">
-                        <span class="summary-label">Grand Total:</span>
-                        <span class="summary-value" id="grandTotal">$0.00</span>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Default Labor Rate ($/hr)</label>
+                            <input type="number" id="defaultLaborRate" step="0.01" value="75.00" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Tax Rate (%)</label>
+                            <input type="number" id="taxRate" step="0.01" value="0" min="0" placeholder="0">
+                        </div>
                     </div>
-                </div>
-            </section>
+                </section>
 
-            <!-- Action Buttons -->
-            <div class="action-buttons">
-                <button type="button" class="btn-primary" id="generatePDF">Generate PDF Quote</button>
-                <button type="button" class="btn-secondary" id="clearForm">Clear Form</button>
-                <button type="button" class="btn-secondary" id="saveDraft">Save Draft</button>
-                <button type="button" class="btn-secondary" id="loadDraft">Load Draft</button>
-                <button type="button" class="btn-secondary" onclick="exportData()">Export Data</button>
-                <button type="button" class="btn-secondary" onclick="importData()">Import Data</button>
-                <button type="button" class="btn-secondary" onclick="window.location.href='config.html'">Settings</button>
+                <!-- Storage Setup for Multi-User/Device -->
+                <section class="form-section">
+                    <h2>Storage & Sync Setup</h2>
+                    <p style="margin-bottom: 16px; color: #86868b;">
+                        Set up shared storage so multiple users or devices can access the same inventory and templates.
+                    </p>
+                    <div class="form-group">
+                        <label>Shared Storage Location</label>
+                        <input type="text" id="sharedStoragePath" placeholder="e.g., /Users/Shared/ProposalData or C:\Shared\ProposalData" style="width: 100%;">
+                        <small style="color: #86868b; display: block; margin-top: 8px;">
+                            Enter a folder path that all users/devices can access (network drive, shared folder, cloud sync folder).
+                            <br><strong>Examples:</strong>
+                            <br>• Network drive: <code>\\server\shared\proposals</code>
+                            <br>• Cloud sync: <code>/Users/Shared/OneDrive/ProposalData</code>
+                            <br>• Local shared: <code>/Users/Shared/ProposalData</code>
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="enableAutoSync" style="margin-right: 8px;">
+                            <strong>Enable Auto-Sync</strong>
+                        </label>
+                        <small style="color: #86868b; display: block; margin-left: 24px; margin-top: 4px;">
+                            Automatically sync inventory and templates to shared location when changes are made.
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="syncOnStartup" style="margin-right: 8px;">
+                            <strong>Sync on Startup</strong>
+                        </label>
+                        <small style="color: #86868b; display: block; margin-left: 24px; margin-top: 4px;">
+                            Load latest data from shared location when app starts.
+                        </small>
+                    </div>
+                    <div style="background: #f5f5f7; padding: 16px; border-radius: 10px; margin-top: 16px;">
+                        <strong style="display: block; margin-bottom: 8px;">💡 How Multi-User Sync Works:</strong>
+                        <ol style="margin-left: 20px; color: #86868b; line-height: 1.8;">
+                            <li>Set a shared folder path (network drive, cloud sync folder, etc.)</li>
+                            <li>All users/devices point to the same folder</li>
+                            <li>Data saves as JSON files in that folder</li>
+                            <li>Changes sync automatically (or on startup)</li>
+                            <li>Everyone sees the same inventory and templates</li>
+                        </ol>
+                    </div>
+                </section>
+
+                <div class="action-buttons">
+                    <button type="button" class="btn-primary" onclick="saveSettings()">Save Settings</button>
+                    <button type="button" class="btn-secondary" onclick="testStorageConnection()">Test Storage Connection</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Parts Library Modal -->
-    <div id="partsLibraryModal" class="modal">
+    <!-- Inventory Form Modal -->
+    <div id="inventoryFormModal" class="modal">
         <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Parts Library</h2>
-            <div id="partsLibraryList"></div>
-            <button type="button" class="btn-secondary" id="closePartsLibrary">Close</button>
+            <span class="close" onclick="closeInventoryForm()">&times;</span>
+            <h2 id="inventoryFormTitle">Add Inventory Item</h2>
+            <form id="inventoryForm" onsubmit="event.preventDefault(); saveInventoryItem();">
+                <div class="form-group">
+                    <label>Item Name *</label>
+                    <input type="text" id="invName" required placeholder="e.g., Mini Excavator">
+                </div>
+                <div class="form-group">
+                    <label>Model Number *</label>
+                    <input type="text" id="invModel" required placeholder="e.g., CAT 305E">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="invDescription" rows="2" placeholder="Equipment description"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Base Price ($) *</label>
+                        <input type="number" id="invPrice" step="0.01" min="0" required placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Discount (%)</label>
+                        <input type="number" id="invDiscount" step="0.1" min="0" max="100" value="0" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Multiplier</label>
+                        <input type="number" id="invMultiplier" step="0.01" min="0" value="1.0" placeholder="1.0">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Stock Quantity</label>
+                        <input type="number" id="invStock" step="1" min="0" value="0" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="invCategory">
+                            <option value="General">General</option>
+                            <option value="Heavy Equipment">Heavy Equipment</option>
+                            <option value="Power Equipment">Power Equipment</option>
+                            <option value="Safety Equipment">Safety Equipment</option>
+                            <option value="Compaction Equipment">Compaction Equipment</option>
+                            <option value="Vehicles">Vehicles</option>
+                            <option value="Concrete Equipment">Concrete Equipment</option>
+                            <option value="Material Handling">Material Handling</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button type="submit" class="btn-primary">Save Item</button>
+                    <button type="button" class="btn-secondary" onclick="closeInventoryForm()">Cancel</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -174,4 +400,3 @@
     <script src="script.js"></script>
 </body>
 </html>
-
