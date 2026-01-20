@@ -1,6 +1,6 @@
-# Construction Quote Generator
+# Proposal Generator
 
-A fast, streamlined web-based tool for generating professional construction quotes focused on **labor and equipment**. Minimal inputs, maximum efficiency.
+A fast, streamlined web-based tool for generating professional construction proposals focused on **labor and equipment**. Minimal inputs, maximum efficiency. Includes inventory management, quote history with revisions, and multi-user sync capabilities.
 
 ## 🚀 Quick Start
 
@@ -12,11 +12,15 @@ A fast, streamlined web-based tool for generating professional construction quot
 ## ✨ Key Features
 
 - **Minimal Input Required:** Smart defaults and templates reduce typing
-- **Construction-Focused:** Built specifically for labor and equipment quotes
+- **Construction-Focused:** Built specifically for labor and equipment proposals
+- **Inventory Management:** Track equipment stock, categories, and pricing
+- **Quote History & Revisions:** Save quotes with full revision tracking
+- **Quote Approval:** Approve quotes and automatically reduce inventory stock
+- **Multi-User Sync:** Share inventory and templates across devices/users
 - **Quick Templates:** Pre-filled options for common tasks and equipment
 - **Auto-Calculations:** Totals update automatically as you type
-- **Professional PDFs:** Clean, print-ready quotes ready to send
-- **One-Time Setup:** Company info saved, reuse for all quotes
+- **Professional PDFs:** Clean, print-ready proposals ready to send
+- **One-Time Setup:** Company info saved, reuse for all proposals
 
 ## 📋 What You Need to Enter
 
@@ -27,7 +31,7 @@ A fast, streamlined web-based tool for generating professional construction quot
 
 **Optional:**
 - Job Name
-- Customer Address
+- Jobsite Address
 - Notes & Assumptions
 - Exclusions
 
@@ -53,7 +57,7 @@ Click "⚙️ Company Settings" and enter:
 
 **Customer Info:**
 - Enter customer name (required)
-- Optional: Job name, address
+- Optional: Job name, jobsite address
 
 **Scope Summary:**
 - Select a template (Electrical, Plumbing, Framing, etc.) OR
@@ -68,10 +72,10 @@ Click "⚙️ Company Settings" and enter:
 
 **Equipment Items:**
 - Click "+ Add Equipment Item"
-- Select template from dropdown (optional)
-- Enter days (use quick-select: 0.5, 1, 2, 5, 10, 20 days)
-- Rate auto-fills from settings (editable)
-- Total calculates automatically
+- Select from inventory OR enter manually
+- Enter quantity and price
+- Add markup percentage (hidden from customer)
+- Total calculates automatically (quantity × price × markup)
 
 **Notes & Exclusions:**
 - Select templates OR type custom text
@@ -156,11 +160,14 @@ The generated PDF includes (in order):
 ## 📁 File Structure
 
 ```
-Construction Quote Generator/
-├── index.html      # Main application (single page)
-├── script.js       # All functionality
-├── styles.css      # Styling
-└── README.md       # This file
+Proposal Generator/
+├── index.html              # Main application (single-page interface)
+├── script.js               # All functionality (~2,200 lines)
+├── styles.css              # Apple-inspired styling
+├── README.md               # Complete documentation
+├── QUICK_START.md          # Quick setup guide
+├── CLIENT_SIDE_EXPLANATION.md  # How client-side storage works
+└── INVENTORY_MANAGEMENT.md # Inventory system documentation
 ```
 
 ## 🆚 What Changed from Previous Version
