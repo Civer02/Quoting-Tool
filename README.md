@@ -157,6 +157,15 @@ The generated PDF includes (in order):
 - **No Backend:** Runs entirely in browser, no server needed
 - **No Installation:** Just open the HTML file
 
+## 🔒 Hybrid Hosting & Privacy
+
+You can **run the app from the cloud** (e.g. GitHub Pages) while keeping **your data local or on a company shared folder**:
+
+- **Code** is served from the host (GitHub, etc.); **no pricing or customer data is sent there**.
+- **Data** (company info, inventory, quotes, templates) lives only in the browser (localStorage) or in your shared folder (via Export/Import or sync).
+- **For companies:** Use Settings → Storage & Sync to point to a shared folder (network drive or cloud-synced folder like OneDrive). Export/import or sync keeps everyone on the same inventory and templates; the app code stays on the host, your numbers stay with you.
+- **Pricing in the repo:** Default inventory and labor rate in the code are placeholders (zeros). Set your real rates and inventory in the app or via import so they never appear in the public repo.
+
 ## 📁 File Structure
 
 ```

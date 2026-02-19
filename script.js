@@ -41,16 +41,16 @@ let SCOPE_TEMPLATES = {};
 let NOTES_TEMPLATES = {};
 let EXCLUSIONS_TEMPLATES = {};
 
-// ===== DEFAULT INVENTORY ITEMS =====
+// ===== DEFAULT INVENTORY ITEMS (placeholder prices only; real pricing lives in localStorage / shared file) =====
 const DEFAULT_INVENTORY = [
-    { id: 'inv-001', name: 'Generator', model: 'Honda EU7000iS', description: '7000W portable inverter generator', price: 250.00, discount: 0, multiplier: 1.0, stock: 4, category: 'Power Equipment' },
-    { id: 'inv-002', name: 'Wire Puller', model: 'Greenlee 555', description: 'Electric wire puller with accessories', price: 180.00, discount: 0, multiplier: 1.0, stock: 3, category: 'Tools' },
-    { id: 'inv-003', name: 'Conduit Bender', model: 'Greenlee 881', description: '1/2" EMT conduit bender', price: 95.00, discount: 0, multiplier: 1.0, stock: 6, category: 'Tools' },
-    { id: 'inv-004', name: 'Cable Tester', model: 'Fluke TS90', description: 'Network cable tester and certifier', price: 320.00, discount: 0, multiplier: 1.0, stock: 2, category: 'Testing Equipment' },
-    { id: 'inv-005', name: 'Multimeter', model: 'Fluke 87V', description: 'True RMS digital multimeter', price: 280.00, discount: 0, multiplier: 1.0, stock: 5, category: 'Testing Equipment' },
-    { id: 'inv-006', name: 'Lift', model: 'Genie GS-1930', description: '19ft scissor lift', price: 175.00, discount: 0, multiplier: 1.0, stock: 3, category: 'Access Equipment' },
-    { id: 'inv-007', name: 'Ladder', model: 'Werner D6232', description: '32ft extension ladder', price: 85.00, discount: 0, multiplier: 1.0, stock: 8, category: 'Access Equipment' },
-    { id: 'inv-008', name: 'Cable Puller', model: 'Greenlee 555-M', description: 'Mechanical cable puller', price: 150.00, discount: 0, multiplier: 1.0, stock: 4, category: 'Tools' }
+    { id: 'inv-001', name: 'Generator', model: 'Honda EU7000iS', description: '7000W portable inverter generator', price: 0, discount: 0, multiplier: 1.0, stock: 0, category: 'Power Equipment' },
+    { id: 'inv-002', name: 'Wire Puller', model: 'Greenlee 555', description: 'Electric wire puller with accessories', price: 0, discount: 0, multiplier: 1.0, stock: 0, category: 'Tools' },
+    { id: 'inv-003', name: 'Conduit Bender', model: 'Greenlee 881', description: '1/2" EMT conduit bender', price: 0, discount: 0, multiplier: 1.0, stock: 0, category: 'Tools' },
+    { id: 'inv-004', name: 'Cable Tester', model: 'Fluke TS90', description: 'Network cable tester and certifier', price: 0, discount: 0, multiplier: 1.0, stock: 0, category: 'Testing Equipment' },
+    { id: 'inv-005', name: 'Multimeter', model: 'Fluke 87V', description: 'True RMS digital multimeter', price: 0, discount: 0, multiplier: 1.0, stock: 0, category: 'Testing Equipment' },
+    { id: 'inv-006', name: 'Lift', model: 'Genie GS-1930', description: '19ft scissor lift', price: 0, discount: 0, multiplier: 1.0, stock: 0, category: 'Access Equipment' },
+    { id: 'inv-007', name: 'Ladder', model: 'Werner D6232', description: '32ft extension ladder', price: 0, discount: 0, multiplier: 1.0, stock: 0, category: 'Access Equipment' },
+    { id: 'inv-008', name: 'Cable Puller', model: 'Greenlee 555-M', description: 'Mechanical cable puller', price: 0, discount: 0, multiplier: 1.0, stock: 0, category: 'Tools' }
 ];
 
 // ===== DEFAULT CATEGORIES =====
@@ -371,7 +371,7 @@ function populateConfigForm() {
         if (phoneInput) phoneInput.value = appConfig.companyPhone || '';
         if (emailInput) emailInput.value = appConfig.companyEmail || '';
         if (addressInput) addressInput.value = appConfig.companyAddress || '';
-        if (laborRateInput) laborRateInput.value = appConfig.defaultLaborRate || 75.00;
+        if (laborRateInput) laborRateInput.value = appConfig.defaultLaborRate ?? '';
         if (taxRateInput) taxRateInput.value = appConfig.taxRate || 0;
         
         if (appConfig.logoData) {
@@ -428,7 +428,7 @@ function saveConfigToStorage(logoData) {
         companyPhone: document.getElementById('configCompanyPhone').value,
         companyEmail: document.getElementById('configCompanyEmail').value,
         companyAddress: document.getElementById('configCompanyAddress').value,
-        defaultLaborRate: parseFloat(document.getElementById('defaultLaborRate').value) || 75.00,
+        defaultLaborRate: parseFloat(document.getElementById('defaultLaborRate').value) || 0,
         taxRate: parseFloat(document.getElementById('taxRate').value) || 0,
         logoData: logoData
     };
@@ -463,7 +463,7 @@ function saveConfigToStorage(logoData) {
 function addLaborItem() {
     laborItemCounter++;
     const container = document.getElementById('laborItemsContainer');
-    const defaultRate = appConfig?.defaultLaborRate || 75.00;
+    const defaultRate = appConfig?.defaultLaborRate || 0;
     
     const item = document.createElement('div');
     item.className = 'line-item';
