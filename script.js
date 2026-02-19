@@ -9,30 +9,30 @@ let inventory = []; // Inventory items array
 let inventoryCategories = []; // Inventory categories array
 let savedQuotes = []; // Array of saved quotes with revisions
 let sharedStoragePath = ''; // Path to shared storage folder
+let sharedStorageHandle = null; // File System Access API directory handle
 let autoSyncEnabled = false;
 let syncOnStartup = false;
 
 // Default Templates (used if not in localStorage)
 const DEFAULT_SCOPE_TEMPLATES = {
-    electrical: "Complete electrical installation including wiring, outlets, switches, and panel connections. All work to be performed per local electrical codes.",
-    plumbing: "Complete plumbing installation including supply lines, fixtures, and connections. All work to be performed per local plumbing codes.",
-    framing: "Framing work including wall construction, structural members, and related carpentry. Materials as specified.",
-    drywall: "Drywall installation including hanging, taping, mudding, and finishing. Includes primer coat.",
-    roofing: "Roofing work including installation, repairs, and related work. Includes materials as specified.",
-    concrete: "Concrete work including preparation, pouring, and finishing. Includes materials as specified."
+    residential: "Complete residential electrical installation including wiring, outlets, switches, and panel connections. All work to be performed per local electrical codes and NEC standards.",
+    commercial: "Complete commercial electrical installation including panel upgrades, circuit installation, and electrical system modifications. All work to be performed per local electrical codes and NEC standards.",
+    service_upgrade: "Electrical service upgrade including new panel installation, meter base, and service entrance. All work to be performed per local electrical codes and utility requirements.",
+    troubleshooting: "Electrical troubleshooting and repair services including diagnosis, repair, and testing of electrical systems. All work to be performed per local electrical codes.",
+    lighting: "Complete lighting installation including fixtures, switches, dimmers, and related electrical work. All work to be performed per local electrical codes."
 };
 
 const DEFAULT_NOTES_TEMPLATES = {
-    standard: "This quote assumes standard site conditions and accessibility. Price valid for 30 days. Payment terms: 50% deposit, balance upon completion.",
-    site: "Assumes standard site conditions, clear access, and standard working hours (M-F, 8am-5pm). Additional charges may apply for difficult access or after-hours work.",
-    materials: "This quote includes all labor and equipment. Materials are included as specified. Any additional materials will be billed separately.",
+    standard: "This quote assumes standard site conditions and accessibility. All electrical work to be performed per NEC and local codes. Price valid for 30 days. Payment terms: 50% deposit, balance upon completion.",
+    site: "Assumes standard site conditions, clear access, and standard working hours (M-F, 8am-5pm). Additional charges may apply for difficult access, after-hours work, or special permit requirements.",
+    materials: "This quote includes all labor and equipment. Electrical materials (wire, devices, breakers) are included as specified. Any additional materials or code upgrades will be billed separately.",
     custom: ""
 };
 
 const DEFAULT_EXCLUSIONS_TEMPLATES = {
-    standard: "Excludes: permits, inspections, disposal fees, and any work not specifically listed above.",
-    permits: "Excludes: permits, inspections, and related fees. Customer responsible for obtaining all necessary permits.",
-    materials: "Excludes: materials, supplies, and consumables. Customer to provide or purchase separately.",
+    standard: "Excludes: electrical permits, inspections, disposal fees, and any work not specifically listed above.",
+    permits: "Excludes: electrical permits, inspections, and related fees. Customer responsible for obtaining all necessary permits and scheduling inspections.",
+    materials: "Excludes: electrical materials, wire, devices, and consumables. Customer to provide or purchase separately.",
     custom: ""
 };
 
@@ -43,27 +43,23 @@ let EXCLUSIONS_TEMPLATES = {};
 
 // ===== DEFAULT INVENTORY ITEMS =====
 const DEFAULT_INVENTORY = [
-    { id: 'inv-001', name: 'Mini Excavator', model: 'CAT 305E', description: 'Compact excavator for tight spaces', price: 350.00, discount: 0, multiplier: 1.0, stock: 2, category: 'Heavy Equipment' },
-    { id: 'inv-002', name: 'Skid Steer Loader', model: 'BOBCAT S570', description: 'Versatile loader for material handling', price: 275.00, discount: 0, multiplier: 1.0, stock: 3, category: 'Heavy Equipment' },
-    { id: 'inv-003', name: 'Tower Crane', model: 'LIEBHERR 71K', description: 'Heavy-duty crane for high-rise construction', price: 1200.00, discount: 0, multiplier: 1.0, stock: 1, category: 'Heavy Equipment' },
-    { id: 'inv-004', name: 'Generator', model: 'CAT 3508B', description: '500kW diesel generator', price: 450.00, discount: 0, multiplier: 1.0, stock: 4, category: 'Power Equipment' },
-    { id: 'inv-005', name: 'Scaffolding Set', model: 'SAFEWAY SYS-10', description: '10ft modular scaffolding system', price: 125.00, discount: 0, multiplier: 1.0, stock: 12, category: 'Safety Equipment' },
-    { id: 'inv-006', name: 'Plate Compactor', model: 'WACKER BS60-4i', description: 'Heavy-duty plate compactor', price: 95.00, discount: 0, multiplier: 1.0, stock: 6, category: 'Compaction Equipment' },
-    { id: 'inv-007', name: 'Dump Truck', model: 'FORD F-750', description: '10-ton capacity dump truck', price: 400.00, discount: 0, multiplier: 1.0, stock: 2, category: 'Vehicles' },
-    { id: 'inv-008', name: 'Concrete Mixer', model: 'CATERPILLAR C1.5', description: '1.5 cubic yard concrete mixer', price: 180.00, discount: 0, multiplier: 1.0, stock: 5, category: 'Concrete Equipment' },
-    { id: 'inv-009', name: 'Air Compressor', model: 'INGERSOLL RAND 185', description: '185 CFM portable air compressor', price: 150.00, discount: 0, multiplier: 1.0, stock: 8, category: 'Power Equipment' },
-    { id: 'inv-010', name: 'Forklift', model: 'TOYOTA 8FGCU25', description: '5000lb capacity forklift', price: 320.00, discount: 0, multiplier: 1.0, stock: 2, category: 'Material Handling' }
+    { id: 'inv-001', name: 'Generator', model: 'Honda EU7000iS', description: '7000W portable inverter generator', price: 250.00, discount: 0, multiplier: 1.0, stock: 4, category: 'Power Equipment' },
+    { id: 'inv-002', name: 'Wire Puller', model: 'Greenlee 555', description: 'Electric wire puller with accessories', price: 180.00, discount: 0, multiplier: 1.0, stock: 3, category: 'Tools' },
+    { id: 'inv-003', name: 'Conduit Bender', model: 'Greenlee 881', description: '1/2" EMT conduit bender', price: 95.00, discount: 0, multiplier: 1.0, stock: 6, category: 'Tools' },
+    { id: 'inv-004', name: 'Cable Tester', model: 'Fluke TS90', description: 'Network cable tester and certifier', price: 320.00, discount: 0, multiplier: 1.0, stock: 2, category: 'Testing Equipment' },
+    { id: 'inv-005', name: 'Multimeter', model: 'Fluke 87V', description: 'True RMS digital multimeter', price: 280.00, discount: 0, multiplier: 1.0, stock: 5, category: 'Testing Equipment' },
+    { id: 'inv-006', name: 'Lift', model: 'Genie GS-1930', description: '19ft scissor lift', price: 175.00, discount: 0, multiplier: 1.0, stock: 3, category: 'Access Equipment' },
+    { id: 'inv-007', name: 'Ladder', model: 'Werner D6232', description: '32ft extension ladder', price: 85.00, discount: 0, multiplier: 1.0, stock: 8, category: 'Access Equipment' },
+    { id: 'inv-008', name: 'Cable Puller', model: 'Greenlee 555-M', description: 'Mechanical cable puller', price: 150.00, discount: 0, multiplier: 1.0, stock: 4, category: 'Tools' }
 ];
 
 // ===== DEFAULT CATEGORIES =====
 const DEFAULT_CATEGORIES = [
-    'Heavy Equipment',
     'Power Equipment',
+    'Tools',
+    'Testing Equipment',
+    'Access Equipment',
     'Safety Equipment',
-    'Compaction Equipment',
-    'Vehicles',
-    'Concrete Equipment',
-    'Material Handling',
     'General'
 ];
 
@@ -478,13 +474,13 @@ function addLaborItem() {
                 <label>Description</label>
                 <select class="labor-template" onchange="applyLaborTemplate(this)" style="margin-bottom: 5px;">
                     <option value="">-- Quick Select --</option>
-                    <option value="electrical">Electrical Work</option>
-                    <option value="plumbing">Plumbing Work</option>
-                    <option value="framing">Framing</option>
-                    <option value="drywall">Drywall</option>
-                    <option value="roofing">Roofing</option>
-                    <option value="concrete">Concrete</option>
-                    <option value="general">General Labor</option>
+                    <option value="installation">Electrical Installation</option>
+                    <option value="wiring">Wiring & Circuits</option>
+                    <option value="panel">Panel Work</option>
+                    <option value="troubleshooting">Troubleshooting</option>
+                    <option value="lighting">Lighting Installation</option>
+                    <option value="service">Service Upgrade</option>
+                    <option value="general">General Electrical</option>
                 </select>
                 <input type="text" class="labor-description" placeholder="Labor description" required>
             </div>
@@ -520,13 +516,13 @@ function addLaborItem() {
 
 function applyLaborTemplate(select) {
     const templates = {
-        electrical: "Electrical installation and wiring",
-        plumbing: "Plumbing installation and connections",
-        framing: "Framing and structural work",
-        drywall: "Drywall installation and finishing",
-        roofing: "Roofing installation and repairs",
-        concrete: "Concrete work and finishing",
-        general: "General construction labor"
+        installation: "Electrical installation and wiring",
+        wiring: "Circuit wiring and installation",
+        panel: "Electrical panel installation and upgrades",
+        troubleshooting: "Electrical troubleshooting and repair",
+        lighting: "Lighting fixture installation",
+        service: "Electrical service upgrade",
+        general: "General electrical work"
     };
     if (select.value) {
         select.parentElement.querySelector('.labor-description').value = templates[select.value];
@@ -2201,8 +2197,8 @@ function resetTemplatesToDefaults() {
 }
 
 // ===== SHARED STORAGE SYNC =====
-function syncToSharedStorage() {
-    if (!sharedStoragePath) return;
+async function syncToSharedStorage() {
+    if (!sharedStoragePath && !sharedStorageHandle) return;
     
     try {
         const data = {
@@ -2217,12 +2213,26 @@ function syncToSharedStorage() {
             version: '1.0'
         };
         
-        // For browser-based app, we'll use export/import pattern
-        // Save to localStorage with a flag that it should be exported
-        localStorage.setItem('pendingSync', JSON.stringify(data));
+        const json = JSON.stringify(data, null, 2);
         
-        // Trigger download for manual sync (user can save to shared location)
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        // If we have a directory handle, write directly to the folder
+        if (sharedStorageHandle) {
+            try {
+                const fileHandle = await sharedStorageHandle.getFileHandle('proposal-data-sync.json', { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(json);
+                await writable.close();
+                console.log('Data synced directly to selected folder via File System Access API');
+                return; // Success, exit early
+            } catch (handleError) {
+                console.warn('Could not write via directory handle, falling back to download:', handleError);
+                // Fall through to download method
+            }
+        }
+        
+        // Fallback: download file for manual placement
+        localStorage.setItem('pendingSync', json);
+        const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -2232,19 +2242,120 @@ function syncToSharedStorage() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        console.log('Data ready for sync. Save the downloaded file to:', sharedStoragePath);
+        if (sharedStoragePath && !sharedStoragePath.startsWith('[Selected:')) {
+            console.log('Data ready for sync. Save the downloaded file to:', sharedStoragePath);
+        } else {
+            console.log('Data downloaded. Place it in your shared folder.');
+        }
     } catch (error) {
         console.error('Sync error:', error);
         alert('Error syncing to shared storage. Check console for details.');
     }
 }
 
-function syncFromSharedStorage() {
-    if (!sharedStoragePath) return;
+async function syncFromSharedStorage() {
+    if (!sharedStoragePath && !sharedStorageHandle) return;
     
-    // For browser-based app, user needs to import from shared location
-    // This function will be called when user clicks "Import" from shared folder
+    // If we have a directory handle, try to read directly
+    if (sharedStorageHandle) {
+        try {
+            const fileHandle = await sharedStorageHandle.getFileHandle('proposal-data-sync.json');
+            const file = await fileHandle.getFile();
+            const text = await file.text();
+            const data = JSON.parse(text);
+            
+            // Load the data
+            if (data.inventory) inventory = data.inventory;
+            if (data.inventoryCategories) inventoryCategories = data.inventoryCategories;
+            if (data.scopeTemplates) SCOPE_TEMPLATES = data.scopeTemplates;
+            if (data.notesTemplates) NOTES_TEMPLATES = data.notesTemplates;
+            if (data.exclusionsTemplates) EXCLUSIONS_TEMPLATES = data.exclusionsTemplates;
+            if (data.savedQuotes) savedQuotes = data.savedQuotes;
+            if (data.appConfig) appConfig = data.appConfig;
+            
+            // Save to localStorage
+            saveInventory();
+            saveCategories();
+            saveTemplates();
+            saveSavedQuotes();
+            if (appConfig) localStorage.setItem('appConfig', JSON.stringify(appConfig));
+            
+            // Refresh UI
+            renderInventoryList();
+            renderTemplateLists();
+            renderQuotesList();
+            refreshEquipmentDropdowns();
+            updateTemplateDropdowns();
+            populateConfigForm();
+            
+            alert('Data synced successfully from shared folder!');
+            return;
+        } catch (handleError) {
+            if (handleError.name === 'NotFoundError') {
+                alert('No sync file found in the selected folder. Make sure "proposal-data-sync.json" exists.');
+            } else {
+                console.error('Error reading from directory handle:', handleError);
+                // Fall through to manual import message
+            }
+        }
+    }
+    
+    // Fallback: guide user to manual import
     alert('To sync from shared storage:\n1. Open the shared folder\n2. Find "proposal-data-sync.json"\n3. Use "Import" function in Inventory or Settings');
+}
+
+async function selectStorageFolder() {
+    // Check if File System Access API is supported
+    if ('showDirectoryPicker' in window) {
+        try {
+            const directoryHandle = await window.showDirectoryPicker({
+                mode: 'readwrite',
+                startIn: 'documents'
+            });
+            
+            // Store the directory handle for file operations
+            sharedStorageHandle = directoryHandle;
+            
+            // Get the folder name
+            const folderName = directoryHandle.name;
+            
+            // Update the input field with folder name
+            const pathInput = document.getElementById('sharedStoragePath');
+            if (pathInput) {
+                // Show folder name (browsers don't expose full paths for security)
+                pathInput.value = `[Selected: ${folderName}]`;
+                pathInput.title = `Folder selected via File System Access API. Folder name: ${folderName}`;
+            }
+            
+            // Save the selection (we'll store a reference that we can use)
+            const storageSettings = {
+                sharedStoragePath: `[Selected: ${folderName}]`,
+                autoSyncEnabled: autoSyncEnabled,
+                syncOnStartup: syncOnStartup,
+                hasDirectoryHandle: true // Flag to indicate we have a handle
+            };
+            localStorage.setItem('storageSettings', JSON.stringify(storageSettings));
+            
+            alert(`Folder selected: "${folderName}"\n\nThe folder has been selected and will be used for file operations.\n\nNote: The directory handle will be used for direct file access when available.`);
+            
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                // User cancelled the picker
+                return;
+            }
+            console.error('Error selecting folder:', error);
+            alert('Error selecting folder. Please enter the path manually.\n\nError: ' + error.message);
+        }
+    } else {
+        // Fallback for browsers that don't support File System Access API
+        alert('Folder picker not supported in this browser.\n\nPlease enter the folder path manually, or use a modern browser like Chrome or Edge.');
+        
+        // Focus the input field for manual entry
+        const pathInput = document.getElementById('sharedStoragePath');
+        if (pathInput) {
+            pathInput.focus();
+        }
+    }
 }
 
 function testStorageConnection() {

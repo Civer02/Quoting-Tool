@@ -290,9 +290,14 @@
                     </p>
                     <div class="form-group">
                         <label>Shared Storage Location</label>
-                        <input type="text" id="sharedStoragePath" placeholder="e.g., /Users/Shared/ProposalData or C:\Shared\ProposalData" style="width: 100%;">
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" id="sharedStoragePath" placeholder="e.g., /Users/Shared/ProposalData or C:\Shared\ProposalData" style="flex: 1;">
+                            <button type="button" class="btn-secondary" onclick="selectStorageFolder()" style="white-space: nowrap; padding: 10px 16px;">
+                                📁 Browse Folder
+                            </button>
+                        </div>
                         <small style="color: #86868b; display: block; margin-top: 8px;">
-                            Enter a folder path that all users/devices can access (network drive, shared folder, cloud sync folder).
+                            Click "Browse Folder" to select a folder, or enter a path manually. All users/devices should point to the same folder.
                             <br><strong>Examples:</strong>
                             <br>• Network drive: <code>\\server\shared\proposals</code>
                             <br>• Cloud sync: <code>/Users/Shared/OneDrive/ProposalData</code>
