@@ -20,6 +20,7 @@ A fast, streamlined web-based tool for generating professional construction prop
 - **Quick Templates:** Pre-filled options for common tasks and equipment
 - **Auto-Calculations:** Totals update automatically as you type
 - **Professional PDFs:** Clean, print-ready proposals ready to send
+- **iPhone Logo Support:** HEIC/HEIF logo files are converted automatically
 - **One-Time Setup:** Company info saved, reuse for all proposals
 
 ## 📋 What You Need to Enter
@@ -215,6 +216,11 @@ Proposal Generator/
 - Check that all required fields are filled
 - Verify at least one labor or equipment item exists
 - Check browser console for errors
+
+**"My iPhone logo file won't load"**
+- HEIC/HEIF logo files are supported and converted on upload
+- If conversion fails, refresh the page and try uploading again
+- You can also export as JPG/PNG from Photos and upload that instead
 
 **"Templates not working"**
 - Make sure JavaScript is enabled

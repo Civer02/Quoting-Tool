@@ -12,6 +12,7 @@ let sharedStoragePath = ''; // Path to shared storage folder
 let sharedStorageHandle = null; // File System Access API directory handle
 let autoSyncEnabled = false;
 let syncOnStartup = false;
+let pendingLogoUpload = null;
 
 // Default Templates (used if not in localStorage)
 const DEFAULT_SCOPE_TEMPLATES = {
@@ -62,6 +63,70 @@ const DEFAULT_CATEGORIES = [
     'Safety Equipment',
     'General'
 ];
+
+const IPHONE_IMAGE_EXTENSIONS = new Set(['heic', 'heif']);
+
+// ===== FILE SUPPORT HELPERS =====
+function getFileExtension(fileName = '') {
+    const parts = fileName.split('.');
+    if (parts.length < 2) return '';
+    return parts.pop().toLowerCase();
+}
+
+function isIPhoneHeicFile(file) {
+    if (!file) return false;
+    const mimeType = (file.type || '').toLowerCase();
+    const extension = getFileExtension(file.name || '');
+    return mimeType.includes('heic') || mimeType.includes('heif') || IPHONE_IMAGE_EXTENSIONS.has(extension);
+}
+
+function blobToDataURL(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Could not read image file.'));
+        reader.readAsDataURL(blob);
+    });
+}
+
+function getPdfImageFormatFromDataUrl(dataUrl) {
+    if (typeof dataUrl !== 'string') return 'PNG';
+    if (dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg')) return 'JPEG';
+    if (dataUrl.startsWith('data:image/webp')) return 'WEBP';
+    return 'PNG';
+}
+
+async function normalizeLogoFile(file) {
+    if (!file) {
+        throw new Error('Please select an image file.');
+    }
+
+    const mimeType = (file.type || '').toLowerCase();
+    if (!mimeType.startsWith('image/') && !isIPhoneHeicFile(file)) {
+        throw new Error('Please select a valid image file for your logo.');
+    }
+
+    // iPhone photos are often HEIC/HEIF and need conversion for jsPDF.
+    if (isIPhoneHeicFile(file)) {
+        if (typeof window.heic2any !== 'function') {
+            throw new Error('HEIC/HEIF support is still loading. Refresh the page and try again.');
+        }
+        const converted = await window.heic2any({
+            blob: file,
+            toType: 'image/jpeg',
+            quality: 0.92
+        });
+        const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
+        if (!(convertedBlob instanceof Blob)) {
+            throw new Error('Could not convert the HEIC/HEIF logo. Please try another image.');
+        }
+        const dataUrl = await blobToDataURL(convertedBlob);
+        return { dataUrl, format: getPdfImageFormatFromDataUrl(dataUrl) };
+    }
+
+    const dataUrl = await blobToDataURL(file);
+    return { dataUrl, format: getPdfImageFormatFromDataUrl(dataUrl) };
+}
 
 // ===== INITIALIZATION =====
 document.addEventListener('DOMContentLoaded', function() {
@@ -394,35 +459,49 @@ function populateConfigForm() {
     if (syncStartupInput) syncStartupInput.checked = syncOnStartup;
 }
 
-function handleLogoUpload(event) {
+async function handleLogoUpload(event) {
     const file = event.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById('logoPreviewImg').src = e.target.result;
-            document.getElementById('logoPreview').style.display = 'block';
-        };
-        reader.readAsDataURL(file);
+    if (!file) {
+        pendingLogoUpload = null;
+        return;
+    }
+
+    try {
+        pendingLogoUpload = await normalizeLogoFile(file);
+        document.getElementById('logoPreviewImg').src = pendingLogoUpload.dataUrl;
+        document.getElementById('logoPreview').style.display = 'block';
+    } catch (error) {
+        console.error('Logo upload error:', error);
+        pendingLogoUpload = null;
+        event.target.value = '';
+        alert(error.message || 'Could not load this logo file.');
     }
 }
 
-function saveSettings() {
+async function saveSettings() {
     const logoFile = document.getElementById('logoUpload').files[0];
     let logoData = appConfig?.logoData || null;
+    let logoFormat = appConfig?.logoFormat || getPdfImageFormatFromDataUrl(logoData);
     
     if (logoFile) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            logoData = e.target.result;
-            saveConfigToStorage(logoData);
-        };
-        reader.readAsDataURL(logoFile);
-            } else {
-        saveConfigToStorage(logoData);
+        try {
+            if (!pendingLogoUpload) {
+                pendingLogoUpload = await normalizeLogoFile(logoFile);
+            }
+            logoData = pendingLogoUpload.dataUrl;
+            logoFormat = pendingLogoUpload.format;
+        } catch (error) {
+            console.error('Settings save logo error:', error);
+            alert(error.message || 'Could not process the selected logo file.');
+            return;
+        }
     }
+
+    saveConfigToStorage(logoData, logoFormat);
+    pendingLogoUpload = null;
 }
 
-function saveConfigToStorage(logoData) {
+function saveConfigToStorage(logoData, logoFormat) {
     appConfig = {
         companyName: document.getElementById('configCompanyName').value,
         companyPhone: document.getElementById('configCompanyPhone').value,
@@ -430,7 +509,8 @@ function saveConfigToStorage(logoData) {
         companyAddress: document.getElementById('configCompanyAddress').value,
         defaultLaborRate: parseFloat(document.getElementById('defaultLaborRate').value) || 0,
         taxRate: parseFloat(document.getElementById('taxRate').value) || 0,
-        logoData: logoData
+        logoData: logoData,
+        logoFormat: logoData ? (logoFormat || getPdfImageFormatFromDataUrl(logoData)) : null
     };
     
     localStorage.setItem('appConfig', JSON.stringify(appConfig));
@@ -773,7 +853,8 @@ function generatePDF() {
     // Header with Logo
     if (appConfig?.logoData) {
         try {
-            doc.addImage(appConfig.logoData, 'PNG', 150, yPos, 40, 20);
+            const logoFormat = appConfig.logoFormat || getPdfImageFormatFromDataUrl(appConfig.logoData);
+            doc.addImage(appConfig.logoData, logoFormat, 150, yPos, 40, 20);
             yPos += 25;
         } catch (e) {
             console.log('Logo error:', e);
