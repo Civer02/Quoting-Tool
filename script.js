@@ -12,6 +12,143 @@ let sharedStoragePath = ''; // Path to shared storage folder
 let sharedStorageHandle = null; // File System Access API directory handle
 let autoSyncEnabled = false;
 let syncOnStartup = false;
+let pendingLogoDataUrl = null; // Normalized logo data URL (PNG) pending save
+
+// ===== FILE / iOS COMPAT HELPERS =====
+function stripBom(text) {
+    if (typeof text !== 'string') return text;
+    return text.replace(/^\uFEFF/, '');
+}
+
+async function readFileAsText(file) {
+    if (!file) throw new Error('No file provided');
+    if (typeof file.text === 'function') {
+        return await file.text();
+    }
+    // Older Safari/iOS: File.text() may not exist
+    return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ''));
+        reader.onerror = () => reject(reader.error || new Error('Failed to read file'));
+        reader.readAsText(file);
+    });
+}
+
+async function readFileAsDataUrl(file) {
+    if (!file) throw new Error('No file provided');
+    return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ''));
+        reader.onerror = () => reject(reader.error || new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+    });
+}
+
+function isLikelyIOS() {
+    const ua = navigator.userAgent || '';
+    const isAppleMobile = /iPad|iPhone|iPod/.test(ua);
+    const isIpadOS = ua.includes('Macintosh') && 'ontouchend' in document;
+    return isAppleMobile || isIpadOS;
+}
+
+async function saveBlobToDevice(blob, filename, { preferShare = true, shareTitle = '', shareText = '' } = {}) {
+    const safeName = filename || 'download';
+    const safeBlob = blob instanceof Blob ? blob : new Blob([blob]);
+
+    if (preferShare && navigator.share && navigator.canShare) {
+        try {
+            const file = new File([safeBlob], safeName, { type: safeBlob.type || 'application/octet-stream' });
+            if (navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: shareTitle, text: shareText });
+                return;
+            }
+        } catch (e) {
+            // Fall back to download
+            console.warn('Share failed, falling back to download:', e);
+        }
+    }
+
+    const url = URL.createObjectURL(safeBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    a.rel = 'noopener';
+    if (isLikelyIOS()) {
+        // iOS Safari sometimes ignores download; a target helps avoid replacing the app page
+        a.target = '_blank';
+    }
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Give Safari a moment to start the navigation before revoking
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function convertImageFileToPngDataUrl(file, { maxWidth = 1200, maxHeight = 600 } = {}) {
+    // Try to decode and re-encode as PNG so jsPDF can reliably embed it (incl. HEIC from iPhone).
+    const objectUrl = URL.createObjectURL(file);
+    try {
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = objectUrl;
+        if (img.decode) {
+            await img.decode();
+        } else {
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+            });
+        }
+
+        const srcW = img.naturalWidth || img.width || 1;
+        const srcH = img.naturalHeight || img.height || 1;
+        const scale = Math.min(1, maxWidth / srcW, maxHeight / srcH);
+        const outW = Math.max(1, Math.round(srcW * scale));
+        const outH = Math.max(1, Math.round(srcH * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = outW;
+        canvas.height = outH;
+        const ctx = canvas.getContext('2d', { alpha: true });
+        if (!ctx) throw new Error('Canvas not supported');
+        ctx.drawImage(img, 0, 0, outW, outH);
+        return canvas.toDataURL('image/png');
+    } finally {
+        URL.revokeObjectURL(objectUrl);
+    }
+}
+
+async function ensurePngDataUrl(dataUrl) {
+    if (!dataUrl || typeof dataUrl !== 'string') return null;
+    if (dataUrl.startsWith('data:image/png')) return dataUrl;
+
+    // Convert existing data URLs (jpeg/heic/etc) to PNG using canvas
+    try {
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = dataUrl;
+        if (img.decode) {
+            await img.decode();
+        } else {
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+            });
+        }
+        const srcW = img.naturalWidth || img.width || 1;
+        const srcH = img.naturalHeight || img.height || 1;
+        const canvas = document.createElement('canvas');
+        canvas.width = srcW;
+        canvas.height = srcH;
+        const ctx = canvas.getContext('2d', { alpha: true });
+        if (!ctx) return dataUrl;
+        ctx.drawImage(img, 0, 0);
+        return canvas.toDataURL('image/png');
+    } catch (e) {
+        console.warn('Could not normalize image data URL to PNG:', e);
+        return dataUrl;
+    }
+}
 
 // Default Templates (used if not in localStorage)
 const DEFAULT_SCOPE_TEMPLATES = {
@@ -394,32 +531,44 @@ function populateConfigForm() {
     if (syncStartupInput) syncStartupInput.checked = syncOnStartup;
 }
 
-function handleLogoUpload(event) {
-    const file = event.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById('logoPreviewImg').src = e.target.result;
-            document.getElementById('logoPreview').style.display = 'block';
-        };
-        reader.readAsDataURL(file);
+async function handleLogoUpload(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+
+    try {
+        // Normalize to PNG so it embeds reliably in PDF (incl. iPhone HEIC).
+        pendingLogoDataUrl = await convertImageFileToPngDataUrl(file, { maxWidth: 1200, maxHeight: 600 });
+    } catch (e) {
+        console.warn('Could not normalize logo image; falling back to original data URL:', e);
+        pendingLogoDataUrl = await readFileAsDataUrl(file);
     }
+
+    const imgEl = document.getElementById('logoPreviewImg');
+    const previewEl = document.getElementById('logoPreview');
+    if (imgEl) imgEl.src = pendingLogoDataUrl;
+    if (previewEl) previewEl.style.display = 'block';
 }
 
-function saveSettings() {
-    const logoFile = document.getElementById('logoUpload').files[0];
+async function saveSettings() {
+    const logoInput = document.getElementById('logoUpload');
+    const logoFile = logoInput?.files?.[0];
     let logoData = appConfig?.logoData || null;
-    
+
     if (logoFile) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            logoData = e.target.result;
-            saveConfigToStorage(logoData);
-        };
-        reader.readAsDataURL(logoFile);
-            } else {
-        saveConfigToStorage(logoData);
+        // If user selected a new file but we haven't normalized yet, do it now.
+        if (!pendingLogoDataUrl) {
+            try {
+                pendingLogoDataUrl = await convertImageFileToPngDataUrl(logoFile, { maxWidth: 1200, maxHeight: 600 });
+            } catch (e) {
+                console.warn('Could not normalize logo image on save; falling back to original data URL:', e);
+                pendingLogoDataUrl = await readFileAsDataUrl(logoFile);
+            }
+        }
+        logoData = pendingLogoDataUrl;
     }
+
+    saveConfigToStorage(logoData);
+    pendingLogoDataUrl = null;
 }
 
 function saveConfigToStorage(logoData) {
@@ -753,7 +902,7 @@ function validateForm() {
 }
 
 // ===== PDF GENERATION =====
-function generatePDF() {
+async function generatePDF() {
     if (!validateForm()) return;
     
     // Check if jsPDF is loaded
@@ -773,8 +922,11 @@ function generatePDF() {
     // Header with Logo
     if (appConfig?.logoData) {
         try {
-            doc.addImage(appConfig.logoData, 'PNG', 150, yPos, 40, 20);
-            yPos += 25;
+            const logoPng = await ensurePngDataUrl(appConfig.logoData);
+            if (logoPng) {
+                doc.addImage(logoPng, 'PNG', 150, yPos, 40, 20);
+                yPos += 25;
+            }
         } catch (e) {
             console.log('Logo error:', e);
         }
@@ -1065,9 +1217,15 @@ function generatePDF() {
         doc.text(`Page ${i} of ${pageCount}`, 105, 285, { align: 'center' });
     }
     
-    // Save PDF
-    const fileName = `Quote_${document.getElementById('quoteNumber').value}_${formatDate(document.getElementById('quoteDate').value).replace(/\//g, '-')}.pdf`;
-    doc.save(fileName);
+    // Save PDF (iPhone-friendly: Share to Files when supported)
+    const fileName = `Quote_${document.getElementById('quoteNumber').value}_${formatDate(document.getElementById('quoteDate').value).replace(/\\//g, '-')}.pdf`;
+    try {
+        const pdfBlob = doc.output('blob');
+        await saveBlobToDevice(pdfBlob, fileName, { preferShare: true, shareTitle: 'Proposal PDF', shareText: 'Generated proposal PDF' });
+    } catch (e) {
+        console.warn('Could not save via Blob/share; falling back to jsPDF save():', e);
+        doc.save(fileName);
+    }
     } catch (error) {
         console.error('PDF Generation Error:', error);
         console.error('Error details:', error.message, error.stack);
@@ -1423,7 +1581,7 @@ function deleteQuote(quoteNumber) {
     alert('Quote deleted.');
 }
 
-function exportAllQuotes() {
+async function exportAllQuotes() {
     const data = {
         quotes: savedQuotes,
         exportDate: new Date().toISOString(),
@@ -1431,14 +1589,8 @@ function exportAllQuotes() {
     };
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `quotes-backup-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const filename = `quotes-backup-${new Date().toISOString().split('T')[0]}.json`;
+    await saveBlobToDevice(blob, filename, { preferShare: true, shareTitle: 'Quotes Backup', shareText: 'Proposal Generator quotes backup' });
     
     alert('All quotes exported!');
 }
@@ -1446,12 +1598,13 @@ function exportAllQuotes() {
 function importQuotes() {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json';
+    input.accept = '.json,application/json,text/plain';
     input.onchange = async (e) => {
         const file = e.target.files[0];
         if (file) {
             try {
-                const text = await file.text();
+                const rawText = await readFileAsText(file);
+                const text = stripBom(rawText).trim();
                 const data = JSON.parse(text);
                 
                 if (data.quotes && Array.isArray(data.quotes)) {
@@ -1853,7 +2006,7 @@ function removeCategory(categoryName) {
 }
 
 // ===== INVENTORY EXPORT/IMPORT =====
-function exportInventory() {
+async function exportInventory() {
     const data = {
         inventory: inventory,
         inventoryCategories: inventoryCategories,
@@ -1867,15 +2020,8 @@ function exportInventory() {
     };
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
     const filename = sharedStoragePath ? 'proposal-data-sync.json' : `proposal-data-backup-${new Date().toISOString().split('T')[0]}.json`;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    await saveBlobToDevice(blob, filename, { preferShare: true, shareTitle: 'Proposal Data Export', shareText: 'Proposal Generator data export' });
     
     if (sharedStoragePath) {
         alert(`Data exported! Save "proposal-data-sync.json" to:\n${sharedStoragePath}\n\nOther users can import from this location.`);
@@ -1887,12 +2033,13 @@ function exportInventory() {
 function importInventory() {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json';
+    input.accept = '.json,application/json,text/plain';
     input.onchange = async (e) => {
         const file = e.target.files[0];
         if (file) {
             try {
-                const text = await file.text();
+                const rawText = await readFileAsText(file);
+                const text = stripBom(rawText).trim();
                 const data = JSON.parse(text);
                 
                 // Handle full sync file (from shared storage)
@@ -2233,14 +2380,8 @@ async function syncToSharedStorage() {
         // Fallback: download file for manual placement
         localStorage.setItem('pendingSync', json);
         const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'proposal-data-sync.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // Avoid surprising share sheets during auto-sync; stick to download behavior here.
+        await saveBlobToDevice(blob, 'proposal-data-sync.json', { preferShare: false });
         
         if (sharedStoragePath && !sharedStoragePath.startsWith('[Selected:')) {
             console.log('Data ready for sync. Save the downloaded file to:', sharedStoragePath);
@@ -2261,7 +2402,8 @@ async function syncFromSharedStorage() {
         try {
             const fileHandle = await sharedStorageHandle.getFileHandle('proposal-data-sync.json');
             const file = await fileHandle.getFile();
-            const text = await file.text();
+            const rawText = await readFileAsText(file);
+            const text = stripBom(rawText).trim();
             const data = JSON.parse(text);
             
             // Load the data
@@ -2348,7 +2490,8 @@ async function selectStorageFolder() {
         }
     } else {
         // Fallback for browsers that don't support File System Access API
-        alert('Folder picker not supported in this browser.\n\nPlease enter the folder path manually, or use a modern browser like Chrome or Edge.');
+        const iosNote = isLikelyIOS() ? '\n\nOn iPhone/iPad, use Export/Import and choose “Save to Files” from the Share sheet.' : '';
+        alert('Folder picker not supported in this browser.\n\nPlease enter the folder path manually, or use a modern browser like Chrome or Edge.' + iosNote);
         
         // Focus the input field for manual entry
         const pathInput = document.getElementById('sharedStoragePath');

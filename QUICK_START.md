@@ -54,6 +54,12 @@ Open `index.html` in any modern web browser (Chrome, Firefox, Edge, Safari).
 
 Your quote is ready to send to the customer. All calculations are automatic, formatting is professional, and it's print-ready.
 
+## 📱 Using on iPhone/iPad
+
+- Open the app in Safari from an `https://` site (recommended).
+- For **Export** actions, use the Share sheet → **Save to Files**.
+- For **Import** actions, pick the exported `.json` from the iOS Files picker.
+
 ---
 
 **Need help?** Check the main README.md for detailed documentation.

@@ -9,6 +9,15 @@ A fast, streamlined web-based tool for generating professional construction prop
 3. **Create Quote:** Fill in customer name, select templates, add labor/equipment items
 4. **Generate PDF:** Click "Generate PDF Quote" - done!
 
+## 📱 iPhone / iPad (iOS) Files Support
+
+If you’re using this on an iPhone/iPad (Safari):
+
+- **Best way to run it**: host the files on a simple static site (GitHub Pages/Netlify/etc.) and open it via `https://` in Safari.
+- **Export (backup/share)**: tap **Export** and use the iOS **Share** sheet → **Save to Files** (iCloud Drive / On My iPhone).
+- **Import**: tap **Import** and select the `.json` file from the iOS **Files** picker.
+- **Logo upload (HEIC from iPhone)**: HEIC/HEIF logos are automatically converted to **PNG** so they embed reliably in the generated PDF.
+
 ## ✨ Key Features
 
 - **Minimal Input Required:** Smart defaults and templates reduce typing

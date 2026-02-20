@@ -40,7 +40,7 @@ Your Browser
 
 ### Export Inventory (Backup)
 1. Click "📥 Export Inventory" in inventory manager
-2. JSON file downloads to your computer
+2. A JSON file is saved/downloaded (on iPhone/iPad you’ll get the Share sheet → choose **Save to Files**)
 3. Save this file to backup your inventory
 4. Can be shared with others or moved to different computers
 
